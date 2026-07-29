@@ -1,0 +1,15 @@
+{
+  "name": "rio",
+  "private": true,
+  "devDependencies": {
+    "turbo": "2.10.7"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/github-app",
+    "packages/db",
+    "packages/shared-types",
+    "packages/ui",
+    "packages/config"
+  ]
+}

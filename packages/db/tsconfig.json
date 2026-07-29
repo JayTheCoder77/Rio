@@ -1,0 +1,8 @@
+{
+  "extends": "../config/tsconfig-base.json",
+  "compilerOptions": {
+    "types": ["node"],   // no DOM here — this package never runs in a browser
+    // "outDir": "./dist"
+  },
+  "include": ["src", "drizzle.config.ts"]
+}

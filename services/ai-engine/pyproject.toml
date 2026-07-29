@@ -1,0 +1,15 @@
+[project]
+name = "ai-engine"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "rio-core",
+    "fastapi",
+    "uvicorn[standard]",
+    "langgraph",
+    "langchain-ollama",
+    "pydantic>=2",
+]
+
+[tool.uv.sources]
+rio-core = { workspace = true }
