@@ -8,6 +8,13 @@
       "when": 1785087801309,
       "tag": "0000_unique_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785417885855,
+      "tag": "0001_shiny_ikaris",
+      "breakpoints": true
     }
   ]
 }

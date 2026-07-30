@@ -13,6 +13,7 @@ export const installations = pgTable('installations', {
   githubInstallationId: bigint('github_installation_id', { mode: 'number' }).notNull().unique(),
   accountLogin: text('account_login').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at'),
 });
 
 export const repos = pgTable('repos', {
