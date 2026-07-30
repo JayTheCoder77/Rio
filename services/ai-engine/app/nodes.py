@@ -1,6 +1,5 @@
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
-
 from rio_core.diff import parse_diff
 from rio_core.models import Finding
 
@@ -19,7 +18,7 @@ class FindingsResponse(BaseModel):
     findings: list[Finding]
 
 
-llm = ChatOllama(model="llama3.1", temperature=0)
+llm = ChatOllama(model="llama3.1:latest", temperature=0)
 structured_llm = llm.with_structured_output(FindingsResponse)
 
 REVIEW_SYSTEM_PROMPT = """You are Rio, an automated code reviewer. You are given a unified diff \

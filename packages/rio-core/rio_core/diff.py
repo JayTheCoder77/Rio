@@ -1,5 +1,7 @@
-from rio_core.models import ParsedFile
 from unidiff import PatchSet
+
+from rio_core.models import ParsedFile
+
 
 def parse_diff(diff: str) -> list[ParsedFile]:
     patch = PatchSet(diff)

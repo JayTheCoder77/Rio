@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field
-
 from rio_core.models import Finding, ParsedFile
 
 

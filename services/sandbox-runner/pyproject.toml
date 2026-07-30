@@ -2,4 +2,9 @@
 name = "sandbox-runner"
 version = "0.0.0"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "rio-core",
+]
+
+[tool.uv.sources]
+rio-core = { workspace = true }
