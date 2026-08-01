@@ -1,0 +1,21 @@
+{
+  "name": "@rio/worker",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/worker.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@octokit/auth-app": "^8.2.0",
+    "@rio/shared-types": "workspace:*",
+    "bullmq": "^6.0.0",
+    "ioredis": "^5.10.1",
+    "octokit": "^5.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.2"
+  },
+  "type": "module"
+}

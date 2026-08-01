@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "start": "probot run ./lib/index.js",
+    "start": "bunx --bun probot run ./src/index.ts",
     "test": "vitest",
     "check-types": "tsc --noEmit"
   },
