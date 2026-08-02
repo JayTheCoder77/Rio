@@ -600,6 +600,7 @@ _Status markers below reflect the artifact's own phase status as of this handoff
 - Update the Day 7 worker: after successfully posting the GitHub review, write the review row and one finding row per comment.
 - Replace the in-memory idempotency check with a real one: query `reviews` for an existing row matching `head_sha`.
 - Manually sanity-check a few rows via `drizzle-kit studio` or raw SQL after a real test PR runs through the pipeline.
+- **External upstream note (May 2026):** GitHub is rolling out stateless installation tokens (`ghs_APPID_JWT`, ~520 chars, two dots) replacing the 40-char opaque format, staged from Apr 27 2026 with a brownout to flush out format-dependent apps. Audited Rio: clean — zero token-handling code; the worker's `createAppAuth` mints/holds tokens internally and never inspects them (no length/regex/DB-column assumptions, tokens not persisted). Test harness: temporary `X-GitHub-Stateless-S2S-Token: enabled|disabled` header on `POST /app/installations/:id/access_tokens` to force either format; the header will be deprecated. Keep `@octokit/auth-app` updated — it absorbs the format change; `expires_at`-based caching is unaffected.
 
 ### Phase 06 · Days 9–10 — Retrieval: repo-aware context
 

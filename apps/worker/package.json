@@ -11,7 +11,9 @@
     "@rio/shared-types": "workspace:*",
     "bullmq": "^6.0.0",
     "ioredis": "^5.10.1",
-    "octokit": "^5.0.5"
+    "octokit": "^5.0.5",
+    "@rio/db" : "workspace:*",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -5,13 +5,15 @@ import path from "node:path";
 import type { PrReviewJob } from '@rio/shared-types';
 import { Octokit } from 'octokit';
 import { createAppAuth } from "@octokit/auth-app";
+import { db, repos, reviews, findings, installations } from "@rio/db";
+import { eq, and } from "drizzle-orm";
+
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") }); // root: REDIS_URL
 dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY
 
 const connection = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
 
-const reviewedShas = new Set<string>();
 
 async function postFailureComment(
     octokit: Octokit,
@@ -28,9 +30,17 @@ async function postFailureComment(
 }
 
 const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>) => {
-    const { repo, prNumber, headSha, installationId } = job.data;
+    const { repo, prNumber, headSha, installationId, githubRepoId } = job.data;
+    
+    const [existing] = await db.select({ id : reviews.id })
+    .from(reviews)
+    .where(and(
+        eq(reviews.headSha, headSha),
+        eq(reviews.status, 'completed'),
+    ))
+    .limit(1)
 
-    if (reviewedShas.has(headSha)) return;
+    if (existing) return;
 
     const [owner, repoName] = repo.split("/");
     if (!owner || !repoName) throw new Error(`Malformed repo full_name : ${repo}`);
@@ -62,18 +72,19 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             throw new Error(`ai-engine returned ${res.status}`);
         }
 
-        const { findings } = await res.json() as {
+        const { findings: engineFindings } = await res.json() as {
             findings: { file: string; line: number; severity: string; message: string; rationale: string }[];
         };
 
-        if (findings.length > 0) {
+        if (engineFindings.length > 0) {
+
             await octokit.rest.pulls.createReview({
                 owner,
                 repo: repoName,
                 pull_number: prNumber,
                 commit_id: headSha,
                 event: "COMMENT",
-                comments: findings.map(f => ({
+                comments: engineFindings.map(f => ({
                     path: f.file,
                     line: f.line,
                     body: `**[${f.severity}]** ${f.message}\n\n${f.rationale}`,
@@ -81,7 +92,46 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             });
         }
 
-        reviewedShas.add(headSha);
+        const [inst] = await db.select({id : installations.id})
+            .from(installations)
+            .where(eq(installations.githubInstallationId, installationId))
+            .limit(1);
+        
+        if (!inst) throw new Error(`Installation ${installationId} not found`);
+
+        const [repoRow] = await db.insert(repos)
+            .values({installationId : inst.id , githubRepoId , fullName : repo})
+            .onConflictDoUpdate({
+                target : repos.githubRepoId,
+                set : {fullName : repo},
+            })
+            .returning({id : repos.id});
+        
+        if (!repoRow) return;
+
+        await db.transaction(async (tx) => {
+            const [rev] = await tx.insert(reviews)
+                .values({repoId: repoRow.id, prNumber, headSha, status: 'completed'})
+                .onConflictDoNothing()
+                .returning({id : reviews.id});
+                
+                if (!rev) return;
+                
+                if (engineFindings.length > 0) {
+                    await tx.insert(findings).values(
+                        engineFindings.map(f => ({
+                            reviewId : rev.id,
+                            file: f.file,
+                            line: f.line,
+                            severity: f.severity as "critical" | "warning" | "info",
+                            message: f.message,
+                            rationale: f.rationale,
+                        }))
+                    );
+                }
+        });
+
+        
     } catch (err) {
         try {
             await postFailureComment(octokit, owner, repoName, prNumber);

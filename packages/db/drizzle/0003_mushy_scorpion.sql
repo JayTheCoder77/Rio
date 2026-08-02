@@ -1,0 +1,1 @@
+ALTER TABLE "repos" ADD COLUMN "deleted_at" timestamp;

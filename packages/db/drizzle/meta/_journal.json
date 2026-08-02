@@ -15,6 +15,20 @@
       "when": 1785417885855,
       "tag": "0001_shiny_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785669737553,
+      "tag": "0002_fluffy_callisto",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785690494989,
+      "tag": "0003_mushy_scorpion",
+      "breakpoints": true
     }
   ]
 }

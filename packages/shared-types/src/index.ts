@@ -4,5 +4,6 @@ export interface PrReviewJob {
     baseSha : string;
     headSha : string;
     installationId : number;
+    githubRepoId : number;
 }
 
