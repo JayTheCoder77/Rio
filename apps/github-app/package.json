@@ -21,9 +21,10 @@
     "@rio/db": "workspace:*",
     "@rio/shared-types": "workspace:*",
     "bullmq": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "0.45.2",
     "ioredis": "^5.10.1",
-    "probot": "^14.3.2",
-    "drizzle-orm": "0.45.2"
+    "probot": "^14.3.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
