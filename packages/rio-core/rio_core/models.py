@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class ParsedFile(BaseModel):
     path: str
-    added_lines: set[int]
+    added_lines: dict[int , str]
 
 
 class Finding(BaseModel):
@@ -14,3 +14,10 @@ class Finding(BaseModel):
     severity: Literal["critical", "warning", "info"]
     message: str
     rationale: str
+
+class RetrievedChunk(BaseModel):
+    file_path : str
+    start_line: int
+    end_line: int
+    text: str
+    score: float

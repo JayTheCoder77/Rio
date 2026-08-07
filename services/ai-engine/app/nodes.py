@@ -1,22 +1,23 @@
-from langchain_ollama import ChatOllama
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from pydantic import BaseModel
 from rio_core.diff import parse_diff
-from rio_core.models import Finding
+from rio_core.models import Finding, RetrievedChunk
 
+from app.indexing import index
 from app.state import ReviewState
+from app.utils.utils import format_context
 
 MAX_DIFF_CHARS = 40_000  # rough token-cost guardrail — tune once real PRs start flowing
-
+MAX_CONTEXT_CHARS = 5000
+embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
 def ingest(state: ReviewState) -> dict:
     if len(state.diff) > MAX_DIFF_CHARS:
         raise ValueError(f"diff too large ({len(state.diff)} chars) — cap is {MAX_DIFF_CHARS}")
     return {"parsed_files": parse_diff(state.diff)}
 
-
 class FindingsResponse(BaseModel):
     findings: list[Finding]
-
 
 llm = ChatOllama(model="llama3.1:latest", temperature=0)
 structured_llm = llm.with_structured_output(FindingsResponse)
@@ -28,6 +29,11 @@ Only comment on lines that are added or modified in this diff — never on uncha
 context lines, and never invent a file or line number that isn't present in the diff. \
 Use the line number from the new (target) version of the file, as shown in the diff's \
 hunk headers (the `+` side of `@@ -a,b +c,d @@`).
+
+You may also be given retrieved context from elsewhere in the repository, clearly \
+labeled as such. Use it only to inform your understanding of the diff — never cite a  \
+file or line number from the retrieved context, and never report issues that exist \
+only in the retrieved context and not in the diff itself.
 
 For each issue, assign a severity:
 - "critical": bugs, security vulnerabilities, data loss, or correctness errors that \
@@ -49,10 +55,56 @@ For each finding, give:
 """
 
 def review(state: ReviewState) -> dict:
+    human_message = f"""## Retrieved context from the repository
+                        {format_context(state.context)}
+                        ## Diff to review
+                        {state.diff}"""
     response: FindingsResponse = structured_llm.invoke(
         [
             ("system", REVIEW_SYSTEM_PROMPT),
-            ("human", state.diff),
+            ("human", human_message),
         ]
     )
     return {"findings": response.findings}
+
+def enrich(state : ReviewState) -> dict:
+    if state.repo_id is None:
+        return {"context": []}
+    all_candidates : list[RetrievedChunk] = []
+
+    for pf in state.parsed_files:
+        query_text = "\n".join(pf.added_lines.values())
+        if not query_text.strip():
+            continue
+
+        vector = embeddings.embed_query(query_text)
+        results = index.query(
+            vector=vector,
+            top_k=3,
+            namespace=state.repo_id,
+            include_metadata=True
+        )
+
+        for match in results.matches:
+            if match.metadata["file_path"] == pf.path:
+                continue
+            all_candidates.append(RetrievedChunk(
+                file_path=match.metadata["file_path"],
+                start_line=match.metadata["start_line"],
+                end_line=match.metadata["end_line"],
+                text=match.metadata["text"],
+                score=match.score, 
+            ))
+        
+    all_candidates.sort(key=lambda c: c.score, reverse=True)
+  
+    context: list[RetrievedChunk] = []
+    total = 0
+    for c in all_candidates:
+        if total + len(c.text) > MAX_CONTEXT_CHARS:
+            break
+        context.append(c)
+        total += len(c.text)
+
+    return {"context": context}
+        

@@ -21,6 +21,7 @@ dependencies = [
     { name = "langgraph" },
     { name = "pinecone" },
     { name = "pydantic" },
+    { name = "python-dotenv" },
     { name = "rio-core" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -33,6 +34,7 @@ requires-dist = [
     { name = "langgraph" },
     { name = "pinecone", specifier = ">=9.1.0" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "rio-core", editable = "packages/rio-core" },
     { name = "uvicorn", extras = ["standard"] },
 ]

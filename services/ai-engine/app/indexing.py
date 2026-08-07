@@ -1,12 +1,14 @@
 import os
 from itertools import batched
 
+from dotenv import load_dotenv
 from langchain_ollama import OllamaEmbeddings
 from pinecone import Pinecone
 from rio_core.chunking import CodeChunk, chunk_file, walk_repo
 
-pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-index = pc.Index(os.environ.get("PINECONE_INDEX_NAME", "rio"))
+load_dotenv()
+pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
 BATCH_SIZE=100

@@ -11,6 +11,7 @@ dependencies = [
     "langchain-text-splitters>=1.1.2",
     "pydantic>=2",
     "pinecone>=9.1.0",
+    "python-dotenv>=1.2.2",
 ]
 
 [tool.uv.sources]

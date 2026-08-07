@@ -53,6 +53,11 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
         },
     });
 
+    const [existingRepoRow] = await db.select({id : repos.id})
+        .from(repos)
+        .where(eq(repos.githubRepoId , githubRepoId))
+        .limit(1);
+
     try {
         const { data: diff } = await octokit.rest.pulls.get({
             owner,
@@ -64,7 +69,7 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
         const res = await fetch(`${process.env.AI_ENGINE_URL ?? "http://localhost:8000"}/v1/review`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ diff: diff as unknown as string }),
+            body: JSON.stringify({ diff: diff as unknown as string , repo_id : existingRepoRow?.id }),
         });
 
         if (!res.ok) {
