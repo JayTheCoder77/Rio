@@ -68,6 +68,8 @@ Git state as of this update: 3 commits on `main` (`267028a scaffold`, `7cda818 d
 
 ## 4. Architecture (condensed — full spec in Appendix A)
 
+Reference diagram (`image.png` in repo root, added post-Day-9): full end-to-end system flow — Developer → {CLI, Website, GitHub App} → Redis Queue → LangGraph pipeline (`ingest → context enrichment → review → verify → pre-merge gate`) → {Sandbox Runner, Postgres, Pinecone, LLM Provider}. Matches the architecture already described below and in Appendix A; no new decisions, confirms the target shape. One detail worth noting against current real state: the diagram shows GitHub App triggering the Sandbox Runner Cloud Run Job directly as part of the worker's job — this path is still unwired in real code (see Day 7/Day 9 notes below: the worker has no sandbox/clone code yet).
+
 - **GitHub App** (Probot, Bun): webhook receiver → verifies → enqueues to Redis/BullMQ → returns 200 immediately. A separate worker drains the queue, fetches the diff, calls `ai-engine`, posts results via Octokit (inline comments + summary + Check Run).
 - **AI Engine** (FastAPI + LangGraph, Python): `POST /v1/review` runs a graph `ingest → review → (future: verify) → END`. Currently talks to a **local Ollama** model (`llama3.1`) via `langchain-ollama`, structured output via `with_structured_output`. Swappable to Anthropic/OpenAI later behind the same LangChain interface.
 - **Sandbox Runner** (two Docker images, Python): own image runs hand-rolled `ruff`/`eslint` runners for Python/JS-TS (kept over MegaLinter's bundled equivalents after empirical testing showed real gaps — see §7); a second image runs MegaLinter (`cupcake` flavor) scoped via `ENABLE_LINTERS` to every other language (currently Go proven working via `revive`; `golangci-lint` has a known nested-module limitation; Rust/`clippy` unverified). An orchestrator (`app/orchestrator.py`) runs both as sibling `docker run` invocations and merges results — never nests MegaLinter inside the sandbox's own container (would require mounting the host Docker socket = root-equivalent host access from a container whose job is running untrusted code).
@@ -604,12 +606,15 @@ _Status markers below reflect the artifact's own phase status as of this handoff
 
 ### Phase 06 · Days 9–10 — Retrieval: repo-aware context
 
-**Day 09 — Indexing pipeline.** Goal: a repo's codebase is chunked, embedded, and searchable in Pinecone.
-- Choose an embedding model — keep it pluggable, consistent with the BYOK direction.
-- Create a Pinecone account and index; one namespace per repo.
-- Implement `POST /v1/index/repo` in ai-engine: read the repo, chunk files (function/class boundary, or fixed-size with overlap), embed each chunk.
-- Upsert chunks to Pinecone with metadata: file path, line range, repo id.
-- Trigger indexing on `installation.created`, and again on pushes to the default branch (full re-index is fine at this scale).
+**Day 09 — Indexing pipeline.** Goal: a repo's codebase is chunked, embedded, and searchable in Pinecone, with an automatic trigger. **DONE**, verified end-to-end on a real repo.
+
+- Embedding model: Ollama `nomic-embed-text` (768-dim). Pinecone index (dimension=768, cosine), namespace = `repos.id`.
+- `packages/rio-core/rio_core/chunking.py`: `CodeChunk`, `chunk_file()` (LangChain `RecursiveCharacterTextSplitter.from_language()`), `walk_repo()`.
+- `services/ai-engine/app/indexing.py`: `index_repo(repo_path, repo_id) -> int` — walks, chunks, batches, embeds, upserts with deterministic ID `f"{file_path}:{start_line}-{end_line}"`.
+- `services/ai-engine/app/main.py`: `POST /v1/index/repo` (`IndexRepoRequest{repo_path, repo_id}` → `{status, chunks_indexed}`).
+- **Trigger**: `apps/worker/src/clone.ts` (`cloneRepo(owner, repoName, sha, token)` — shallow clone at SHA via Bun's `$`, caller-owned `cleanup()`) + `apps/worker/src/indexWorker.ts` (new `index-repo` BullMQ queue/worker: mints installation token → `cloneRepo` → calls `/v1/index/repo` → `cleanup()` in `finally`). Producer side enqueues from `apps/github-app/src/index.ts`'s `installation.created`/`installation_repositories.added` handler (resolves default-branch HEAD SHA via `context.octokit`, passes `repos.id` as `repoId`).
+- Verified real end-to-end run (`apps/worker/tests/testIndex.ts`): real installation, real repo (`JayTheCoder77/computerVision`), real SHA → 28 chunks indexed, confirmed via `describe_index_stats()` (`total_vector_count=28`, `namespaces=1`) and no leftover temp clone dirs.
+- **DONE**: `push`-to-default-branch handler added in `apps/github-app/src/index.ts` — skips non-default branches, looks up the repo's DB row, enqueues the same `IndexRepoJob` shape (SHA from `context.payload.after`). App subscribed to `push` in real GitHub settings (manifest-file edits don't apply post-registration).
 
 **Day 10 — Context-enrichment graph node.** Goal: the review prompt includes retrieved context, and the graph has grown a real middle node.
 - Add a new LangGraph node between ingest and review (e.g. `enrich`): for each changed hunk, query Pinecone for related chunks.
@@ -648,9 +653,10 @@ _Status markers below reflect the artifact's own phase status as of this handoff
 
 ### Phase 10 · Day 14 — Verify node, pre-merge gate, MCP
 
-**Day 14 — Verify · gate · MCP server.** Goal: fewer hallucinated findings, and a real merge-blocking check on critical ones.
+**Day 14 — Verify · gate · MCP server.** Goal: fewer hallucinated findings, and a real merge-blocking check on critical ones. **Sandbox-runner wiring is currently a hard gap, not just a deferred sub-step** — confirmed zero callers of sandbox-runner anywhere in `ai-engine` or `worker` (grepped both, no matches); the Day 5 sandbox-runner service and its orchestrator have never been invoked by anything since they were built.
 - Build a verify node: cross-check each finding's file+line against `parsed_files.added_lines` (already available since Day 3), drop findings citing a line not actually in the diff.
-- Extend verify to cross-check against the sandbox-runner's lint/SAST output — down-rank or drop findings with no corroborating signal.
+- Extend verify to cross-check against the sandbox-runner's lint/SAST output — down-rank or drop findings with no corroborating signal. This needs a real local checkout (sandbox-runner bind-mounts a path, it doesn't clone) — reuse the `cloneRepo` logic built for Day 9 indexing rather than duplicating it.
+- Decide the runtime shape: does sandbox-runner get triggered synchronously inside the `pr-review` job (adds latency, simplest), or does it need its own step/queue like indexing does (more consistent with the "slow work gets its own queue" pattern already established for Day 9, but more infra)?
 - Wire verify into the graph between review and END.
 - Implement a GitHub Check Run via Octokit that fails if any unresolved critical finding exists — gated behind a repo-level opt-in.
 - Document (don't build) the branch-protection interaction: repo owners still have to mark the check required in GitHub's own settings.

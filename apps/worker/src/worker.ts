@@ -8,7 +8,6 @@ import { createAppAuth } from "@octokit/auth-app";
 import { db, repos, reviews, findings, installations } from "@rio/db";
 import { eq, and } from "drizzle-orm";
 
-
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") }); // root: REDIS_URL
 dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY
 
