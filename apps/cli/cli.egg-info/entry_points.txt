@@ -1,0 +1,2 @@
+[console_scripts]
+rio = rio_cli.main:app

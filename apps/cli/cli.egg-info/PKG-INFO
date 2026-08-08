@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: cli
+Version: 0.0.0
+Requires-Python: <3.13,>=3.12
+Requires-Dist: rio-core
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: rich>=15.0.0
+Requires-Dist: typer>=0.27.1
