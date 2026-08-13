@@ -640,7 +640,10 @@ _Status markers below reflect the artifact's own phase status as of this handoff
 - Wire up auth (Clerk or Auth.js) using GitHub OAuth, matching the identity of the GitHub App install flow.
 - Build an "Install Rio" button through the GitHub App installation URL, handle the redirect, persist `installation_id` ↔ user mapping.
 - Build a dashboard listing installed repos and recent reviews/findings, reading via the shared `packages/db` Drizzle client.
-- Apply minimal shared styling via `packages/ui` — don't over-invest in design yet.
+- Apply minimal shared styling via `packages/ui`
+- Api keys provided via browser for cli usage
+- Following apps/web/DESIGN.md 
+- Get the functionality running first then focus on design aesthetics and animationss
 
 ### Phase 09 · Day 13 — Docs & per-repo config
 
@@ -660,7 +663,7 @@ _Status markers below reflect the artifact's own phase status as of this handoff
 - Wire verify into the graph between review and END.
 - Implement a GitHub Check Run via Octokit that fails if any unresolved critical finding exists — gated behind a repo-level opt-in.
 - Document (don't build) the branch-protection interaction: repo owners still have to mark the check required in GitHub's own settings.
-- Build a minimal MCP server exposing a `review_diff` tool calling the same compiled LangGraph graph.
+- Build a minimal MCP server with updated spec -> as mcp has gone stateless now exposing a `review_diff` tool calling the same compiled LangGraph graph.
 - End-to-end test: open a PR with a deliberate critical bug, confirm the check goes red; fix it, confirm green.
 
 ### Phase 11 · Day 15 + buffer — Hardening, deploy, and living with it

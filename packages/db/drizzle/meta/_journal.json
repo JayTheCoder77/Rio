@@ -29,6 +29,20 @@
       "when": 1785690494989,
       "tag": "0003_mushy_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786294566991,
+      "tag": "0004_skinny_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786339061921,
+      "tag": "0005_yielding_nekra",
+      "breakpoints": true
     }
   ]
 }

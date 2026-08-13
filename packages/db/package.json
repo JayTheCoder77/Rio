@@ -9,6 +9,8 @@
         ".": "./src/index.ts"
     },
     "dependencies": {
+        "@auth/core": "^0.41.3",
+        "@auth/drizzle-adapter": "^1.11.3",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
         "postgres": "^3.4.9"
@@ -17,5 +19,7 @@
         "@types/node": "^26.1.1",
         "drizzle-kit": "^0.31.10"
     },
-    "scripts": { "check-types": "tsc --noEmit" }
+    "scripts": {
+        "check-types": "tsc --noEmit"
+    }
 }
