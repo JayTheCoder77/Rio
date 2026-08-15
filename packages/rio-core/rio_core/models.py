@@ -7,11 +7,12 @@ class ParsedFile(BaseModel):
     path: str
     added_lines: dict[int , str]
 
+Severity = Literal["critical", "warning", "info"]
 
 class Finding(BaseModel):
     file: str
     line: int
-    severity: Literal["critical", "warning", "info"]
+    severity: Severity
     message: str
     rationale: str
 

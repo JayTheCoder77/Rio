@@ -458,6 +458,7 @@ Chat, Finishing Touches, full code-graph analysis, and AST-based config are the 
 | Analysis depth | Persistent code-graph (tree-sitter), AST-based configuration generation |
 | Ecosystem | More MCP tools (Notion, Linear, Jira), exposing Rio itself as an MCP server |
 | Product | Stripe usage-based billing, CLI device-flow OAuth, Homebrew tap / standalone binary for the CLI, Terraform for reproducible infra |
+cli api key handling , cli auth 
 
 ### 10. Cost & ops guardrails
 Every managed service chosen has a free or usage-based tier and no fixed server to babysit — the one uncapped variable cost is **LLM tokens**. Add a hard per-review diff-size/token cap in the ingest node early (already done — `MAX_DIFF_CHARS`), so one oversized PR can't blow up a solo-dev bill overnight.
@@ -663,7 +664,7 @@ _Status markers below reflect the artifact's own phase status as of this handoff
 - Wire verify into the graph between review and END.
 - Implement a GitHub Check Run via Octokit that fails if any unresolved critical finding exists — gated behind a repo-level opt-in.
 - Document (don't build) the branch-protection interaction: repo owners still have to mark the check required in GitHub's own settings.
-- Build a minimal MCP server with updated spec -> as mcp has gone stateless now exposing a `review_diff` tool calling the same compiled LangGraph graph.
+- Build a minimal MCP server with updated spec -> ""(important note) as mcp has gone stateless now"" exposing a `review_diff` tool calling the same compiled LangGraph graph.
 - End-to-end test: open a PR with a deliberate critical bug, confirm the check goes red; fix it, confirm green.
 
 ### Phase 11 · Day 15 + buffer — Hardening, deploy, and living with it

@@ -6,3 +6,4 @@ Requires-Dist: rio-core
 Requires-Dist: httpx>=0.28.1
 Requires-Dist: rich>=15.0.0
 Requires-Dist: typer>=0.27.1
+Requires-Dist: pyyaml>=6.0

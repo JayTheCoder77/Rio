@@ -43,6 +43,13 @@
       "when": 1786339061921,
       "tag": "0005_yielding_nekra",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786707758015,
+      "tag": "0006_dazzling_namor",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
+from app.auth import get_current_user
 from app.graph import review_graph
 from app.indexing import index_repo
 from app.state import IndexRepoRequest, ReviewState
@@ -13,7 +14,7 @@ def health() -> dict:
 
 
 @app.post("/v1/review")
-def review_endpoint(state: ReviewState) -> ReviewState:
+def review_endpoint(state: ReviewState , user_id : str | None = Depends(get_current_user)) -> ReviewState:
     result = review_graph.invoke(state)
     # check what shape `result` actually comes back as once you run this —
     # langgraph may hand back a plain dict of the final state rather than a

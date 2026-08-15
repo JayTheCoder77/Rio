@@ -7,12 +7,34 @@ import { Octokit } from 'octokit';
 import { createAppAuth } from "@octokit/auth-app";
 import { db, repos, reviews, findings, installations } from "@rio/db";
 import { eq, and } from "drizzle-orm";
+import YAML from 'yaml';
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") }); // root: REDIS_URL
 dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY
 
 const connection = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
 
+async function fetchRioConfig(
+    octokit : Octokit,
+    owner : string,
+    repoName : string,
+    ref : string
+) : Promise<Record<string , unknown > | undefined> {
+    try {
+        const {data} = await octokit.rest.repos.getContent({
+            owner ,
+            repo : repoName,
+            path : ".rio.yml",
+            ref,
+        })
+        if(!("content" in data)) return undefined;
+
+        const decoded = Buffer.from(data.content , "base64").toString("utf-8");
+        return YAML.parse(decoded);
+    } catch(err){
+        return undefined;
+    }
+}
 
 async function postFailureComment(
     octokit: Octokit,
@@ -66,10 +88,14 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             mediaType: { format: "diff" },
         });
 
+        const rioConfig = await fetchRioConfig(octokit , owner , repoName, headSha);
+
         const res = await fetch(`${process.env.AI_ENGINE_URL ?? "http://localhost:8000"}/v1/review`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ diff: diff as unknown as string , repo_id : existingRepoRow?.id }),
+            body: JSON.stringify({ diff: diff as unknown as string , repo_id : existingRepoRow?.id,
+            ...(rioConfig ? {config : rioConfig} : {}),
+             }),
         });
 
         if (!res.ok) {

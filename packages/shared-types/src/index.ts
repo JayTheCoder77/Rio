@@ -13,3 +13,9 @@ export interface IndexRepoJob {
     sha : string;          // default branch HEAD sha to index at
     installationId : number;
 }
+
+export interface DashboardRepo {
+    id: string;                        // repos.id
+    fullName: string;                  // "owner/repo"
+    installationAccountLogin: string;  // installations.account_login, for grouping by org/account
+}

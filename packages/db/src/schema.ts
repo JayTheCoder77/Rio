@@ -82,8 +82,12 @@ export const repos = pgTable('repos', {
 export const apiKeys = pgTable('api_keys', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id),
+  name: text('name').notNull().default('Default'),
+  lastFour: text('last_four').notNull(),
   keyHash: text('key_hash').notNull().unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  lastUsedAt: timestamp('last_used_at'),
+  revokedAt: timestamp('revoked_at'),
 }, (table) => [
   index('api_keys_user_id_idx').on(table.userId),
 ]);

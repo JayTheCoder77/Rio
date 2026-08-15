@@ -1,5 +1,8 @@
+import fnmatch
+
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from pydantic import BaseModel
+from rio_core.config import SEVERITY_RANK
 from rio_core.diff import parse_diff
 from rio_core.models import Finding, RetrievedChunk
 
@@ -14,7 +17,13 @@ embeddings = OllamaEmbeddings(model="nomic-embed-text")
 def ingest(state: ReviewState) -> dict:
     if len(state.diff) > MAX_DIFF_CHARS:
         raise ValueError(f"diff too large ({len(state.diff)} chars) — cap is {MAX_DIFF_CHARS}")
-    return {"parsed_files": parse_diff(state.diff)}
+    
+    parsed_files = parse_diff(state.diff)
+    filtered_files = [
+        pf for pf in parsed_files
+        if not any (fnmatch.fnmatch(pf.path , pattern) for pattern in state.config.ignore_paths)
+   ]
+    return {"parsed_files" : filtered_files}
 
 class FindingsResponse(BaseModel):
     findings: list[Finding]
@@ -65,7 +74,12 @@ def review(state: ReviewState) -> dict:
             ("human", human_message),
         ]
     )
-    return {"findings": response.findings}
+    min_rank = SEVERITY_RANK[state.config.min_severity]
+    filtered = [f for f in response.findings if SEVERITY_RANK[f.severity] >= min_rank]
+
+    filtered.sort(key=lambda f : SEVERITY_RANK[f.severity] ,reverse=True)
+    capped = filtered[: state.config.max_comments_per_pr]
+    return {"findings" : capped}
 
 def enrich(state : ReviewState) -> dict:
     if state.repo_id is None:

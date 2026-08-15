@@ -4,7 +4,7 @@ version = "0.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "rio-core",
-    "fastapi",
+    "fastapi[standard]",
     "uvicorn[standard]",
     "langgraph",
     "langchain-ollama",
@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2",
     "pinecone>=9.1.0",
     "python-dotenv>=1.2.2",
+    "psycopg[binary]>=3.3.4",
 ]
 
 [tool.uv.sources]
