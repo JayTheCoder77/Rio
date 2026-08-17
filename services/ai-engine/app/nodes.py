@@ -121,4 +121,20 @@ def enrich(state : ReviewState) -> dict:
         total += len(c.text)
 
     return {"context": context}
+
+def verify(state : ReviewState) -> dict:
+    valid_lines_by_file = {pf.path : set(pf.added_lines.keys()) for pf in state.parsed_files }
+
+    line_verified = [f for f in state.findings if f.file in valid_lines_by_file and f.line in valid_lines_by_file[f.file]
+    ]
+
+    lint_locations = {(lr.file , lr.line) for lr in state.lint_results}
+
+    corroborated = [
+        f for f in line_verified
+        if f.severity != "info" or (f.file , f.line) in lint_locations
+    ]
+
+    return {"findings": corroborated}
+
         

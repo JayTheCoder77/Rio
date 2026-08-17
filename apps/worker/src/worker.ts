@@ -7,31 +7,38 @@ import { Octokit } from 'octokit';
 import { createAppAuth } from "@octokit/auth-app";
 import { db, repos, reviews, findings, installations } from "@rio/db";
 import { eq, and } from "drizzle-orm";
+import { $ } from 'bun';
 import YAML from 'yaml';
+import { cloneRepo } from './clone';
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") }); // root: REDIS_URL
 dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY
 
 const connection = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
 
+const auth = createAppAuth({
+    appId: process.env.APP_ID!,
+    privateKey: process.env.PRIVATE_KEY!.replace(/\\n/g, "\n"),
+});
+
 async function fetchRioConfig(
-    octokit : Octokit,
-    owner : string,
-    repoName : string,
-    ref : string
-) : Promise<Record<string , unknown > | undefined> {
+    octokit: Octokit,
+    owner: string,
+    repoName: string,
+    ref: string
+): Promise<Record<string, unknown> | undefined> {
     try {
-        const {data} = await octokit.rest.repos.getContent({
-            owner ,
-            repo : repoName,
-            path : ".rio.yml",
+        const { data } = await octokit.rest.repos.getContent({
+            owner,
+            repo: repoName,
+            path: ".rio.yml",
             ref,
         })
-        if(!("content" in data)) return undefined;
+        if (!("content" in data)) return undefined;
 
-        const decoded = Buffer.from(data.content , "base64").toString("utf-8");
+        const decoded = Buffer.from(data.content, "base64").toString("utf-8");
         return YAML.parse(decoded);
-    } catch(err){
+    } catch (err) {
         return undefined;
     }
 }
@@ -50,16 +57,52 @@ async function postFailureComment(
     });
 }
 
+function getRequireCheck(config: Record<string, unknown> | undefined): boolean {
+    return typeof config?.require_check === "boolean" && config.require_check;
+}
+
+async function getChangedFiles(repoPath: string, baseSha: string, headSha: string): Promise<string[]> {
+    const result = await $`git diff --name-only ${baseSha} ${headSha}`.cwd(repoPath).quiet();
+    return result.stdout.toString().split("\n").filter(Boolean);
+}
+
+async function fetchLintResults(
+    repoPath: string,
+    changedFiles: string[],
+): Promise<unknown[]> {
+    try {
+        const res = await
+            fetch(`${process.env.SANDBOX_RUNNER_URL ??
+                "http://localhost:8001"}/v1/verify`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    repo_path: repoPath,
+                    changed_files: changedFiles
+                }),
+            });
+        if (!res.ok) return [];
+        const { lint_results } = await res.json() as {
+            lint_results: unknown[]
+        };
+        return lint_results;
+    } catch {
+        return []; // best-effort — sandbox signal is optional, never fails the review
+    }
+}
+
 const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>) => {
-    const { repo, prNumber, headSha, installationId, githubRepoId } = job.data;
-    
-    const [existing] = await db.select({ id : reviews.id })
-    .from(reviews)
-    .where(and(
-        eq(reviews.headSha, headSha),
-        eq(reviews.status, 'completed'),
-    ))
-    .limit(1)
+    const { repo, prNumber, headSha, baseSha, installationId, githubRepoId } = job.data;
+
+    const [existing] = await db.select({ id: reviews.id })
+        .from(reviews)
+        .where(and(
+            eq(reviews.headSha, headSha),
+            eq(reviews.status, 'completed'),
+        ))
+        .limit(1)
 
     if (existing) return;
 
@@ -75,9 +118,9 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
         },
     });
 
-    const [existingRepoRow] = await db.select({id : repos.id})
+    const [existingRepoRow] = await db.select({ id: repos.id })
         .from(repos)
-        .where(eq(repos.githubRepoId , githubRepoId))
+        .where(eq(repos.githubRepoId, githubRepoId))
         .limit(1);
 
     try {
@@ -88,14 +131,31 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             mediaType: { format: "diff" },
         });
 
-        const rioConfig = await fetchRioConfig(octokit , owner , repoName, headSha);
+        const rioConfig = await fetchRioConfig(octokit, owner, repoName, headSha);
+
+        const { token } = await auth({ type: "installation", installationId });
+        let lintResults: unknown[] = [];
+        try {
+            const { path: repoPath, cleanup } = await cloneRepo(owner, repoName, headSha, token);
+            try {
+                const changedFiles = await getChangedFiles(repoPath, baseSha, headSha);
+                lintResults = await fetchLintResults(repoPath, changedFiles);
+            } finally {
+                await cleanup();
+            }
+        } catch {
+            // clone failed — proceed without sandbox corroboration
+        }
 
         const res = await fetch(`${process.env.AI_ENGINE_URL ?? "http://localhost:8000"}/v1/review`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ diff: diff as unknown as string , repo_id : existingRepoRow?.id,
-            ...(rioConfig ? {config : rioConfig} : {}),
-             }),
+            body: JSON.stringify({
+                diff: diff as unknown as string,
+                repo_id: existingRepoRow?.id,
+                ...(rioConfig ? { config: rioConfig } : {}),
+                lint_results: lintResults,
+            }),
         });
 
         if (!res.ok) {
@@ -122,46 +182,66 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             });
         }
 
-        const [inst] = await db.select({id : installations.id})
+        if (getRequireCheck(rioConfig)) {
+            const hasCritical = engineFindings.some(f => f.severity === "critical");
+            await octokit.rest.checks.create({
+                owner,
+                repo: repoName,
+                name: "Rio",
+                head_sha: headSha,
+                status: "completed",
+                conclusion: hasCritical ? "failure" : "success",
+                output: {
+                    title: hasCritical
+                        ? "Rio found unresolved critical issues"
+                        : "Rio review passed",
+                    summary: hasCritical
+                        ? `${engineFindings.filter(f => f.severity === "critical").length} critical finding(s) - see inline comments`
+                        : "No critical findings"
+                }
+            })
+        }
+
+        const [inst] = await db.select({ id: installations.id })
             .from(installations)
             .where(eq(installations.githubInstallationId, installationId))
             .limit(1);
-        
+
         if (!inst) throw new Error(`Installation ${installationId} not found`);
 
         const [repoRow] = await db.insert(repos)
-            .values({installationId : inst.id , githubRepoId , fullName : repo})
+            .values({ installationId: inst.id, githubRepoId, fullName: repo })
             .onConflictDoUpdate({
-                target : repos.githubRepoId,
-                set : {fullName : repo},
+                target: repos.githubRepoId,
+                set: { fullName: repo },
             })
-            .returning({id : repos.id});
-        
+            .returning({ id: repos.id });
+
         if (!repoRow) return;
 
         await db.transaction(async (tx) => {
             const [rev] = await tx.insert(reviews)
-                .values({repoId: repoRow.id, prNumber, headSha, status: 'completed'})
+                .values({ repoId: repoRow.id, prNumber, headSha, status: 'completed' })
                 .onConflictDoNothing()
-                .returning({id : reviews.id});
-                
-                if (!rev) return;
-                
-                if (engineFindings.length > 0) {
-                    await tx.insert(findings).values(
-                        engineFindings.map(f => ({
-                            reviewId : rev.id,
-                            file: f.file,
-                            line: f.line,
-                            severity: f.severity as "critical" | "warning" | "info",
-                            message: f.message,
-                            rationale: f.rationale,
-                        }))
-                    );
-                }
+                .returning({ id: reviews.id });
+
+            if (!rev) return;
+
+            if (engineFindings.length > 0) {
+                await tx.insert(findings).values(
+                    engineFindings.map(f => ({
+                        reviewId: rev.id,
+                        file: f.file,
+                        line: f.line,
+                        severity: f.severity as "critical" | "warning" | "info",
+                        message: f.message,
+                        rationale: f.rationale,
+                    }))
+                );
+            }
         });
 
-        
+
     } catch (err) {
         try {
             await postFailureComment(octokit, owner, repoName, prNumber);

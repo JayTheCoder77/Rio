@@ -8,5 +8,6 @@ class RioConfig(BaseModel):
     ignore_paths : list[str] = []
     min_severity : Severity = "info"
     max_comments_per_pr : int = 10
+    require_check : bool = False
 
 

@@ -30,7 +30,7 @@ def run_eslint(repo_path: str, js_files: list[str]) -> list[LintResult]:
     for file_result in file_results:
         for msg in file_result["messages"]:
             lint_results.append(LintResult(
-                file=file_result["filePath"],
+                file=path_map[file_result["filePath"]],
                 line=msg["line"],
                 rule_id=msg["ruleId"] or "parse-error",
                 message=msg["message"],

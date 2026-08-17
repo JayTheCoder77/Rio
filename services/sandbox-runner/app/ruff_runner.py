@@ -20,7 +20,7 @@ def run_ruff(repo_path: str, py_files: list[str]) -> list[LintResult]:
 
     issues = json.loads(result.stdout)
     return [LintResult(
-        file=issue["filename"],
+        file=path_map[issue["filename"]],
         line=issue["location"]["row"],
         rule_id=issue["code"],
         message=issue["message"],

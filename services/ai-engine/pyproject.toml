@@ -13,6 +13,7 @@ dependencies = [
     "pinecone>=9.1.0",
     "python-dotenv>=1.2.2",
     "psycopg[binary]>=3.3.4",
+    "mcp>=2.0.0,<3",
 ]
 
 [tool.uv.sources]

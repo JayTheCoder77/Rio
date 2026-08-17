@@ -1,12 +1,22 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 
 from app.auth import get_current_user
 from app.graph import review_graph
 from app.indexing import index_repo
+from app.mcp_server import mcp
 from app.state import IndexRepoRequest, ReviewState
 
-app = FastAPI()
 
+@asynccontextmanager
+async def lifespan(app : FastAPI) -> AsyncIterator[None]:
+    async with mcp.session_manager.run():
+        yield
+
+app = FastAPI(lifespan=lifespan)
+app.mount("/mcp-server" , mcp.streamable_http_app())
 
 @app.get("/v1/health")
 def health() -> dict:

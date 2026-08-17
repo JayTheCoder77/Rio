@@ -38,6 +38,12 @@ min_severity: warning
 # If more findings pass the severity filter than this, the most
 # severe ones are kept and the rest are silently dropped.
 max_comments_per_pr: 10
+
+# If true, Rio creates a GitHub Check Run on each PR that fails
+# whenever the review finds any critical-severity issue. Off by
+# default — turning this on is what lets you require Rio to pass
+# via GitHub's branch protection settings.
+require_check: false
 `;
 
 export default function DocsPage() {
@@ -198,7 +204,7 @@ export default function DocsPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <CodeBlock code={RIO_YML_EXAMPLE} />
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <p className="text-sm font-medium">ignore_paths</p>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -223,11 +229,29 @@ export default function DocsPage() {
                   kept first. Default: <code className="font-mono">10</code>.
                 </p>
               </div>
+              <div>
+                <p className="text-sm font-medium">require_check</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  If <code className="font-mono">true</code>, Rio creates a
+                  GitHub Check Run that fails when the review finds any
+                  critical issue. Default:{" "}
+                  <code className="font-mono">false</code>.
+                </p>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground">
               This file is read from the exact commit being reviewed, so a
               PR that changes <code className="font-mono">.rio.yml</code>{" "}
               takes effect on itself.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <code className="font-mono">require_check</code> only creates
+              the check — it doesn&apos;t block merging by itself. To
+              actually require it, go to your repo&apos;s{" "}
+              <strong>Settings → Branches → Branch protection rules</strong>,
+              edit (or add) a rule for your target branch, and add{" "}
+              <code className="font-mono">Rio</code> under &quot;Require
+              status checks to pass before merging.&quot;
             </p>
           </CardContent>
         </Card>
