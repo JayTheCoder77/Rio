@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -49,38 +49,39 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  /* Ando-inspired pure-white / near-black / single-blue-accent palette */
+  --background: oklch(1 0 0); /* #FFFFFF pure white */
+  --foreground: oklch(0.208 0 0); /* #1A1A1A */
+  --card: oklch(1 0 0); /* #FFFFFF elevated surface */
+  --card-foreground: oklch(0.208 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.511 0.192 265.522);
+  --popover-foreground: oklch(0.208 0 0);
+  --primary: oklch(0.208 0 0); /* near-black, used for dark pill CTAs */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.951 0.026 264.665);
-  --accent-foreground: oklch(0.379 0.146 265.522);
+  --secondary: oklch(0.971 0 0);
+  --secondary-foreground: oklch(0.208 0 0);
+  --muted: oklch(0.971 0 0);
+  --muted-foreground: oklch(0.478 0 0); /* #6B6B6B body copy */
+  --accent: oklch(0.937 0.0257 258.3); /* #EAF2FF accent-blue-soft */
+  --accent-foreground: oklch(0.51 0.192 265.5);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.511 0.192 265.522);
-  --chart-1: oklch(0.87 0 0);
+  --border: oklch(0.929 0 0); /* #EBEBEB border-subtle */
+  --input: oklch(0.929 0 0);
+  --ring: oklch(0.623 0.194 259.8); /* #3B82F6 accent-blue */
+  --chart-1: oklch(0.623 0.194 259.8);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.511 0.192 265.522);
+  --radius: 1rem;
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.208 0 0);
+  --sidebar-primary: oklch(0.208 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.951 0.026 264.665);
-  --sidebar-accent-foreground: oklch(0.379 0.146 265.522);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.511 0.192 265.522);
+  --sidebar-accent: oklch(0.937 0.0257 258.3);
+  --sidebar-accent-foreground: oklch(0.51 0.192 265.5);
+  --sidebar-border: oklch(0.929 0 0);
+  --sidebar-ring: oklch(0.623 0.194 259.8);
 }
 
 .dark {
@@ -90,7 +91,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.623 0.161 265.522);
+  --primary: oklch(0.985 0 0);
   --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -101,30 +102,64 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.623 0.161 265.522);
-  --chart-1: oklch(0.87 0 0);
+  --ring: oklch(0.623 0.194 259.8);
+  --chart-1: oklch(0.623 0.194 259.8);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.623 0.161 265.522);
+  --sidebar-primary: oklch(0.985 0 0);
   --sidebar-primary-foreground: oklch(0.145 0 0);
   --sidebar-accent: oklch(0.279 0.06 265.522);
   --sidebar-accent-foreground: oklch(0.85 0.1 265.522);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.623 0.161 265.522);
+  --sidebar-ring: oklch(0.623 0.194 259.8);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
   }
+}
+
+/* Ando-style dark surface used for the marketing nav pill, footer, and
+   dark CTA buttons. Kept as a plain hex (not theme-able) since it's a
+   fixed brand surface, not a light/dark-mode token. */
+:root {
+  --surface-dark: #0a0a0a;
+}
+
+/* Restrained entry motion: staggered load for hero, intersection-triggered
+   reveal for below-the-fold sections. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fade-in-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
   html {
-    @apply font-sans;
+    scroll-behavior: auto;
+  }
+  .fade-in-up {
+    animation: none;
   }
 }

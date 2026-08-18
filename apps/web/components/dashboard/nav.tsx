@@ -32,7 +32,7 @@ function NavLink({
 }: {
   href: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   comingSoon?: boolean;
   onNavigate?: () => void;
 }) {
@@ -45,14 +45,14 @@ function NavLink({
       onClick={onNavigate}
       aria-disabled={comingSoon}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-medium transition-colors duration-200",
         isActive
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
         comingSoon && "pointer-events-none opacity-50"
       )}
     >
-      <Icon className="size-4 shrink-0" />
+      <Icon className="size-4 shrink-0" strokeWidth={1.5} />
       <span className="flex-1">{label}</span>
       {comingSoon && (
         <span className="rounded-full bg-sidebar-border px-1.5 py-0.5 text-[10px] font-normal text-sidebar-foreground/60">

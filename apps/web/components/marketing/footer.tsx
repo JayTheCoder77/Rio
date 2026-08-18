@@ -1,79 +1,56 @@
 import Link from "next/link";
-import { Code2, MessageCircle } from "lucide-react";
-
-import { Separator } from "@/components/ui/separator";
 
 const FOOTER_COLUMNS = [
   {
-    title: "Product",
+    title: "Social",
     links: [
-      { href: "/install", label: "Install" },
-      { href: "/docs", label: "Docs" },
-      { href: "/dashboard", label: "Dashboard" },
+      { href: "https://x.com", label: "X / Twitter", external: true },
+      { href: "https://github.com", label: "GitHub", external: true },
     ],
   },
-  {
-    title: "Company",
-    links: [
-      { href: "/about", label: "About" },
-      { href: "/blog", label: "Blog" },
-      { href: "/careers", label: "Careers" },
-    ],
-  },
-  {
-    title: "Legal",
-    links: [
-      { href: "/privacy", label: "Privacy" },
-      { href: "/terms", label: "Terms" },
-    ],
-  },
-];
-
-const SOCIAL_LINKS = [
-  { href: "https://github.com", label: "GitHub", icon: Code2 },
-  { href: "https://twitter.com", label: "Twitter", icon: MessageCircle },
 ];
 
 export function MarketingFooter() {
   return (
-    <footer className="relative overflow-hidden border-t border-border/50">
-      <div className="mx-auto max-w-6xl px-6 py-16">
-        <div className="grid grid-cols-2 gap-10 sm:grid-cols-4">
-          <div className="col-span-2 sm:col-span-1">
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              Rio
-            </Link>
-            <p className="mt-3 max-w-[220px] text-sm text-muted-foreground">
-              AI-powered code review for your CLI and pull requests.
-            </p>
-            <div className="mt-4 flex items-center gap-3">
-              {SOCIAL_LINKS.map((social) => (
-                <a
-                  key={social.href}
-                  href={social.href}
-                  aria-label={social.label}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <social.icon className="size-4" />
-                </a>
-              ))}
-            </div>
-          </div>
+    <footer className="relative overflow-hidden bg-background pt-20">
+      <div className="mx-auto max-w-6xl px-6 sm:px-10">
+        <div className="flex flex-col items-start justify-between gap-8 pb-16 sm:flex-row sm:items-end">
+          <span className="text-base font-semibold tracking-tight text-foreground">
+            RIO
+          </span>
 
+          <Link
+            href="/install"
+            className="inline-flex shrink-0 items-center justify-center rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
+          >
+            Get access
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 gap-10 border-t border-border pb-16 pt-12">
           {FOOTER_COLUMNS.map((column) => (
             <div key={column.title}>
-              <h3 className="text-sm font-medium">{column.title}</h3>
-              <ul className="mt-3 space-y-2">
+              <h3 className="text-sm text-muted-foreground/70">{column.title}</h3>
+              <ul className="mt-4 space-y-3">
                 {column.links.map((link) => (
                   <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {link.label}
-                    </Link>
+                    {"external" in link && link.external ? (
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -81,19 +58,28 @@ export function MarketingFooter() {
           ))}
         </div>
 
-        <Separator className="my-10" />
-
-        <p className="text-xs text-muted-foreground">
+        <p className="pb-8 text-xs text-muted-foreground">
           © {new Date().getFullYear()} Rio. All rights reserved.
         </p>
       </div>
 
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -bottom-[0.3em] left-1/2 -translate-x-1/2 select-none text-[13rem] font-bold leading-none tracking-tight text-foreground/[0.03] sm:text-[18rem]"
-      >
-        Rio
-      </span>
+      {/* Halftone/dotted giant wordmark, purely decorative */}
+      <div aria-hidden className="relative h-[10rem] sm:h-[15rem]">
+        <span
+          className="pointer-events-none absolute -bottom-[0.22em] left-1/2 -translate-x-1/2 select-none text-[13rem] font-bold leading-none tracking-tight text-foreground sm:text-[19rem]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle, rgba(0,0,0,0.35) 1px, transparent 1.4px)",
+            backgroundSize: "6px 6px",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            color: "transparent",
+            WebkitTextStroke: "1px rgba(0,0,0,0.08)",
+          }}
+        >
+          Rio
+        </span>
+      </div>
     </footer>
   );
 }

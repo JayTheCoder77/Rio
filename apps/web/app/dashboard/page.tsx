@@ -3,7 +3,7 @@ import { createInstallState } from "@/lib/install-state";
 import { reconcileUserInstallations } from "@/lib/github-reconciliation";
 import { redirect } from "next/navigation";
 import { GitFork, ShieldAlert, AlertTriangle, Info, GitPullRequest } from "lucide-react";
-import { getUserRepos, userHasInstallations, getReviewStats, getRecentReviews } from "@rio/db";
+import { getUserRepos, getReviewStats, getRecentReviews } from "@rio/db";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -32,9 +32,10 @@ export default async function DashboardPage() {
   const session = await auth();
   const userId = session?.user?.id;
 
-  if (userId && !(await userHasInstallations(userId))) {
-    // First load with no linked installations yet: reconcile against
-    // GitHub in case the App was installed outside our own install flow.
+  if (userId) {
+    // GitHub installations can be added outside our own install callback, or
+    // after a user already has a linked installation. Reconcile on each
+    // dashboard load so those later installs become visible as well.
     await reconcileUserInstallations(userId);
   }
 
@@ -50,7 +51,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Analytics</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Signed in as {session?.user?.email ?? "unknown"}
         </p>
@@ -81,6 +82,7 @@ export default async function DashboardPage() {
               icon={GitPullRequest}
               label="Total reviews"
               value={stats?.totalReviews ?? 0}
+              featured
             />
             <StatCard
               icon={ShieldAlert}
@@ -119,7 +121,7 @@ export default async function DashboardPage() {
                   {recentReviews.map((review) => (
                     <li
                       key={review.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2"
+                      className="flex items-center justify-between gap-3 rounded-[10px] border border-border bg-background px-3 py-2"
                     >
                       <div className="flex items-center gap-2 text-sm">
                         <GitPullRequest className="size-4 text-muted-foreground" />
@@ -164,7 +166,7 @@ export default async function DashboardPage() {
                     {accountRepos.map((repo) => (
                       <li
                         key={repo.id}
-                        className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+                        className="flex items-center gap-2 rounded-[10px] border border-border bg-background px-3 py-2 text-sm"
                       >
                         <GitFork className="size-4 text-muted-foreground" />
                         <span className="font-medium">{repo.fullName}</span>
@@ -191,28 +193,38 @@ function StatCard({
   label,
   value,
   tone,
+  featured,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   label: string;
   value: number;
   tone?: "destructive" | "warning";
+  featured?: boolean;
 }) {
   return (
-    <Card>
+    <Card
+      className={
+        featured
+          ? "border-transparent ring-2 ring-[color:var(--ring)] hover:border-transparent"
+          : undefined
+      }
+    >
       <CardContent className="flex items-center gap-3 pt-6">
         <div
-          className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
+          className={`flex size-9 shrink-0 items-center justify-center rounded-[10px] ${
             tone === "destructive"
               ? "bg-destructive/10 text-destructive"
               : tone === "warning"
                 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                : "bg-muted text-muted-foreground"
+                : featured
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-muted text-muted-foreground"
           }`}
         >
-          <Icon className="size-4.5" />
+          <Icon className="size-4.5" strokeWidth={1.5} />
         </div>
         <div>
-          <p className="text-2xl font-semibold tracking-tight">{value}</p>
+          <p className="text-2xl font-medium tracking-tight">{value}</p>
           <p className="text-xs text-muted-foreground">{label}</p>
         </div>
       </CardContent>

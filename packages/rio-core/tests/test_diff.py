@@ -20,4 +20,4 @@ index e69de29..8c7e5a6 100644
 
     file = parsed[0]
     assert file.path == "src/main.py"
-    assert file.added_lines == {3}
+    assert file.added_lines == {3: 'print("World")\n'}

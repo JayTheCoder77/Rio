@@ -26,7 +26,7 @@ def run_docker(args: list[str], **kwargs) -> subprocess.CompletedProcess:
 def run_own_image(data: SandboxInput) -> SandboxOutput:
     container_input = data.model_copy(update={"repo_path": "/workspace"})
     result = run_docker(
-        ["-i", "-v", f"{data.repo_path}:/workspace", "sandbox-runner:latest", "python3", "-m", "app.main"],
+        ["-i", "-v", f"{data.repo_path}:/workspace", "sandbox-runner:latest", "python3", "-m", "app.sandbox_entrypoint"],
         input=container_input.model_dump_json(), capture_output=True, text=True,
     )
     return SandboxOutput.model_validate_json(result.stdout)

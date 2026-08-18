@@ -7,7 +7,6 @@ import { Octokit } from 'octokit';
 import { createAppAuth } from "@octokit/auth-app";
 import { db, repos, reviews, findings, installations } from "@rio/db";
 import { eq, and } from "drizzle-orm";
-import { $ } from 'bun';
 import YAML from 'yaml';
 import { cloneRepo } from './clone';
 
@@ -61,9 +60,14 @@ function getRequireCheck(config: Record<string, unknown> | undefined): boolean {
     return typeof config?.require_check === "boolean" && config.require_check;
 }
 
-async function getChangedFiles(repoPath: string, baseSha: string, headSha: string): Promise<string[]> {
-    const result = await $`git diff --name-only ${baseSha} ${headSha}`.cwd(repoPath).quiet();
-    return result.stdout.toString().split("\n").filter(Boolean);
+async function getChangedFiles(octokit: Octokit, owner: string, repoName: string, prNumber: number): Promise<string[]> {
+    const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+        owner,
+        repo: repoName,
+        pull_number: prNumber,
+        per_page: 100,
+    });
+    return files.map((f) => f.filename);
 }
 
 async function fetchLintResults(
@@ -138,7 +142,7 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
         try {
             const { path: repoPath, cleanup } = await cloneRepo(owner, repoName, headSha, token);
             try {
-                const changedFiles = await getChangedFiles(repoPath, baseSha, headSha);
+                const changedFiles = await getChangedFiles(octokit, owner, repoName, prNumber);
                 lintResults = await fetchLintResults(repoPath, changedFiles);
             } finally {
                 await cleanup();

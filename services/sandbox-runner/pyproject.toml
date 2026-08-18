@@ -10,3 +10,7 @@ dependencies = [
 
 [tool.uv.sources]
 rio-core = { workspace = true }
+
+[tool.fastapi]
+entrypoint = "app.main:app"
+port=8001

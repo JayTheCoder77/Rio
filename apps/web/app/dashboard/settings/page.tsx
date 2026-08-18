@@ -13,7 +13,7 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Manage your profile and account.
         </p>
@@ -48,7 +48,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-destructive/20 hover:border-destructive/30">
         <CardHeader>
           <CardTitle>Account</CardTitle>
           <CardDescription>Sign out of Rio on this device.</CardDescription>

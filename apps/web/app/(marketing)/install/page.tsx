@@ -28,43 +28,51 @@ const CLI_INSTALL_COMMANDS = [
 export default function InstallPage() {
   return (
     <section className="mx-auto max-w-4xl px-6 py-20">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Install Rio
+      <div>
+        <h1 className="text-3xl font-medium tracking-tight sm:text-4xl">
+          Get started with Rio
         </h1>
         <p className="mt-3 text-muted-foreground">
-          Connect a GitHub repo for automatic PR reviews, or review diffs
-          locally from the CLI.
+          Choose how you want to use Rio.
         </p>
       </div>
 
       <div className="mt-12 grid gap-6 sm:grid-cols-2">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
-            <GitFork className="size-6 text-foreground" />
-            <CardTitle className="mt-2">GitHub App</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+                <GitFork className="size-5 text-foreground" />
+              </div>
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                Recommended for most teams
+              </span>
+            </div>
+            <CardTitle className="mt-4 text-xl">GitHub App</CardTitle>
             <CardDescription>
               Rio reviews every pull request automatically — inline
               comments, a summary, and a pass/fail check.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto">
             <Button size="lg" className="w-full" render={<Link href="/dashboard" />}>
               Install on GitHub
             </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
-            <Terminal className="size-6 text-foreground" />
-            <CardTitle className="mt-2">CLI</CardTitle>
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+              <Terminal className="size-5 text-foreground" />
+            </div>
+            <CardTitle className="mt-4 text-xl">CLI</CardTitle>
             <CardDescription>
               Review staged, uncommitted, or committed changes locally —
               no GitHub connection required.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto flex flex-col gap-3">
             <Tabs defaultValue="uv">
               <TabsList>
                 {CLI_INSTALL_COMMANDS.map((pkg) => (
@@ -79,13 +87,24 @@ export default function InstallPage() {
                 </TabsPanel>
               ))}
             </Tabs>
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Then run <code className="font-mono">rio review --staged</code>{" "}
-              from inside a git repo.
+              from inside a git repo. Requires an API key (create one after
+              signing in).
             </p>
           </CardContent>
         </Card>
       </div>
+
+      <p className="mt-10 text-center text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link
+          href="/login"
+          className="underline underline-offset-2 transition-colors hover:text-foreground"
+        >
+          Sign in
+        </Link>
+      </p>
     </section>
   );
 }

@@ -31,8 +31,8 @@ export function DashboardShell({
     <div className="flex min-h-screen bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden w-60 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-        <div className="flex h-16 items-center px-4">
-          <Link href="/" className="text-lg font-semibold tracking-tight text-sidebar-foreground">
+        <div className="flex h-16 items-center px-5">
+          <Link href="/" className="text-base font-medium tracking-tight text-sidebar-foreground">
             Rio
           </Link>
         </div>
@@ -66,7 +66,7 @@ export function DashboardShell({
                 </div>
               </SheetContent>
             </Sheet>
-            <span className="text-sm font-semibold tracking-tight">Rio</span>
+            <span className="text-sm font-medium tracking-tight">Rio</span>
           </div>
 
           <div className="ml-auto">

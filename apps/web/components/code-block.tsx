@@ -24,7 +24,7 @@ function CodeBlock({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 px-4 py-3",
+        "flex items-center justify-between gap-3 rounded-[10px] border border-border bg-muted px-4 py-3",
         className
       )}
     >

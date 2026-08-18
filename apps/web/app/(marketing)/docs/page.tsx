@@ -25,6 +25,14 @@ const CLI_INSTALL_COMMANDS = [
   },
 ];
 
+const DOC_SECTIONS = [
+  { id: "getting-started", label: "Getting started" },
+  { id: "cli-reference", label: "CLI reference" },
+  { id: "cli-auth", label: "CLI auth" },
+  { id: "rio-yml", label: ".rio.yml" },
+  { id: "self-hosting", label: "Self-hosting" },
+];
+
 const RIO_YML_EXAMPLE = `# .rio.yml — place at the root of your repo
 ignore_paths:
   - "vendor/**"
@@ -49,8 +57,8 @@ require_check: false
 export default function DocsPage() {
   return (
     <section className="mx-auto max-w-3xl px-6 py-16">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+      <div>
+        <h1 className="text-3xl font-medium tracking-tight sm:text-4xl">
           Docs
         </h1>
         <p className="mt-3 text-muted-foreground">
@@ -59,9 +67,21 @@ export default function DocsPage() {
         </p>
       </div>
 
+      <nav className="mt-8 flex flex-wrap gap-2">
+        {DOC_SECTIONS.map((section) => (
+          <a
+            key={section.id}
+            href={`#${section.id}`}
+            className="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+          >
+            {section.label}
+          </a>
+        ))}
+      </nav>
+
       <div className="mt-12 flex flex-col gap-10">
         {/* Getting started */}
-        <Card>
+        <Card id="getting-started" className="scroll-mt-24">
           <CardHeader>
             <GitFork className="size-6 text-foreground" />
             <CardTitle className="mt-2">Getting started</CardTitle>
@@ -113,7 +133,7 @@ export default function DocsPage() {
         </Card>
 
         {/* CLI reference */}
-        <Card>
+        <Card id="cli-reference" className="scroll-mt-24">
           <CardHeader>
             <Terminal className="size-6 text-foreground" />
             <CardTitle className="mt-2">CLI reference</CardTitle>
@@ -163,7 +183,7 @@ export default function DocsPage() {
         </Card>
 
         {/* API key / auth */}
-        <Card>
+        <Card id="cli-auth" className="scroll-mt-24">
           <CardHeader>
             <Settings className="size-6 text-foreground" />
             <CardTitle className="mt-2">Authenticating the CLI</CardTitle>
@@ -192,7 +212,7 @@ export default function DocsPage() {
         </Card>
 
         {/* .rio.yml reference */}
-        <Card>
+        <Card id="rio-yml" className="scroll-mt-24">
           <CardHeader>
             <FileCode className="size-6 text-foreground" />
             <CardTitle className="mt-2">.rio.yml reference</CardTitle>
@@ -257,7 +277,7 @@ export default function DocsPage() {
         </Card>
 
         {/* Self-hosting note */}
-        <Card>
+        <Card id="self-hosting" className="scroll-mt-24">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">
               Rio is open architecture, not a black box — the GitHub App,

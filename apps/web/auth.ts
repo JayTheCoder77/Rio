@@ -4,9 +4,53 @@ import { eq, and } from "drizzle-orm";
 import { db, users, accounts } from "@rio/db";
 import authConfig from "./auth.config";
 
+function isConnectionReset(error: unknown): boolean {
+  let current = error;
+
+  // Drizzle wraps driver failures in `Error: Failed query`, keeping the
+  // database error under `cause`.
+  for (let depth = 0; depth < 3 && current && typeof current === "object"; depth++) {
+    if ("code" in current && current.code === "ECONNRESET") return true;
+    current = "cause" in current ? current.cause : undefined;
+  }
+
+  return false;
+}
+
+function retryConnectionReset<TArgs extends unknown[], TResult>(
+  operation: (...args: TArgs) => TResult,
+): (...args: TArgs) => Promise<Awaited<TResult>> {
+  return (async (...args: TArgs) => {
+    try {
+      return await operation(...args);
+    } catch (error) {
+      if (!isConnectionReset(error)) throw error;
+      return operation(...args);
+    }
+  }) as (...args: TArgs) => Promise<Awaited<TResult>>;
+}
+
+const adapter = DrizzleAdapter(db, { usersTable: users, accountsTable: accounts });
+
+// A reset can occur when Neon wakes an idle compute. Retrying reads is safe;
+// do not retry adapter writes because their result may be unknown after a
+// disconnected socket.
+if (adapter.getUserByAccount) {
+  adapter.getUserByAccount = retryConnectionReset(adapter.getUserByAccount);
+}
+if (adapter.getUserByEmail) {
+  adapter.getUserByEmail = retryConnectionReset(adapter.getUserByEmail);
+}
+if (adapter.getUser) {
+  adapter.getUser = retryConnectionReset(adapter.getUser);
+}
+if (adapter.getSessionAndUser) {
+  adapter.getSessionAndUser = retryConnectionReset(adapter.getSessionAndUser);
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  adapter: DrizzleAdapter(db, { usersTable: users, accountsTable: accounts }),
+  adapter,
   session: { strategy: "jwt" },
   callbacks: {
     async jwt({ token, user, account }) {

@@ -1,5 +1,4 @@
 import { Probot } from "probot";
-import { db, installations, repos } from "@rio/db";
 import { eq } from "drizzle-orm";
 import { Queue } from "bullmq";
 import type { IndexRepoJob, PrReviewJob } from "@rio/shared-types";
@@ -13,6 +12,10 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not set in the .env file');
 }
 
+// Static ESM imports run before this module body. Load the environment first,
+// then import the shared database module so it sees DATABASE_URL at creation.
+const { db, installations, repos } = await import("@rio/db");
+
 const connection = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
 const prReviewQueue = new Queue<PrReviewJob>("pr-review", { connection });
 const indexRepoQueue = new Queue<IndexRepoJob>("index-repo", { connection });
@@ -21,7 +24,11 @@ export default (app: Probot) => {
   app.on(["installation.created", "installation_repositories.added"], async (context) => {
     const id = context.payload.installation.id;
     const account = context.payload.installation.account;
-    const payloadRepos = (context.payload as { repositories?: { id: number; full_name: string }[] }).repositories ?? [];
+    const payload = context.payload as {
+      repositories?: { id: number; full_name: string }[];
+      repositories_added?: { id: number; full_name: string }[];
+    };
+    const payloadRepos = payload.repositories ?? payload.repositories_added ?? [];
 
     if (!account || !("login" in account)) return;
     const login = account.login;
@@ -67,7 +74,7 @@ export default (app: Probot) => {
   });
 
   app.on("installation_repositories.removed", async (context) => {
-    const payloadRepos = (context.payload as unknown as { repositories: { id: number }[] }).repositories;
+    const payloadRepos = (context.payload as unknown as { repositories_removed: { id: number }[] }).repositories_removed;
     for (const repo of payloadRepos) {
       await db.update(repos)
         .set({ deletedAt: new Date() })
@@ -145,5 +152,4 @@ export default (app: Probot) => {
     });
   });
 }
-
 

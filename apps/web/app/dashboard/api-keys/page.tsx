@@ -16,7 +16,7 @@ export default async function ApiKeysPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">API Keys</h1>
+        <h1 className="text-2xl font-medium tracking-tight">API Keys</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Use API keys to authenticate the Rio CLI.
         </p>
@@ -44,17 +44,17 @@ export default async function ApiKeysPage() {
           </CardDescription>
         </CardHeader>
         {keys.length > 0 && (
-          <CardContent>
-            <ul className="flex flex-col gap-2">
+          <CardContent className="p-0 pb-0">
+            <ul className="flex flex-col divide-y divide-border border-t border-border">
               {keys.map((key) => (
                 <li
                   key={key.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2"
+                  className="flex items-center justify-between gap-3 px-6 py-3"
                 >
-                  <div className="flex items-center gap-2 text-sm">
-                    <KeyRound className="size-4 text-muted-foreground" />
-                    <span className="font-medium">{key.name}</span>
-                    <span className="font-mono text-muted-foreground">
+                  <div className="flex items-center gap-2.5 text-sm">
+                    <KeyRound className="size-4 text-muted-foreground" strokeWidth={1.5} />
+                    <span className="font-medium text-foreground">{key.name}</span>
+                    <span className="rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                       ••••{key.lastFour}
                     </span>
                   </div>
