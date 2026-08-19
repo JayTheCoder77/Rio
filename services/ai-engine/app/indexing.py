@@ -7,9 +7,23 @@ from pinecone import Pinecone
 from rio_core.chunking import CodeChunk, chunk_file, walk_repo
 
 load_dotenv()
-pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
-embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+# Clients are constructed lazily on first use. `Pinecone.Index(...)` makes a
+# live control-plane call to resolve the index host, so importing this module
+# must not require Pinecone credentials or network access (CI has neither).
+pc: Pinecone | None = None
+index: object | None = None
+embeddings: OllamaEmbeddings | None = None
+
+
+def _ensure_clients() -> None:
+    global pc, index, embeddings
+    if index is None:
+        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
+    if embeddings is None:
+        embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
 
 BATCH_SIZE=100
 
@@ -19,6 +33,8 @@ def index_repo(repo_path : str , repo_id : str) -> int:
     all_chunks : list[CodeChunk] = []
     for path,content in walk_repo(repo_path):
         all_chunks.extend(chunk_file(path , content))
+
+    _ensure_clients()
 
     for batch in batched(all_chunks , BATCH_SIZE):
         texts = [chunk.text for chunk in batch]

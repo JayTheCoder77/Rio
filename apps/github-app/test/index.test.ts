@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// src/index.ts reads DATABASE_URL at module load (guard + dotenv from the
+// repo root). CI has no .env, so provide a value before the module imports.
+// The @rio/db module it actually feeds is mocked below, so no real DB.
+vi.hoisted(() => {
+  process.env.DATABASE_URL ??= "postgres://rio:rio@localhost:5432/rio";
+});
+
 const mocks = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
   const insertValues: unknown[] = [];
