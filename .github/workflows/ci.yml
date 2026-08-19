@@ -2,16 +2,32 @@ on:
   push:
     branches: [main]
   pull_request:
-  
+
 jobs:
   js:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rio
+          POSTGRES_PASSWORD: rio
+          POSTGRES_DB: rio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run check-types
       - run: bun run lint
+      # @rio/db integration tests run against the service container above.
+      - run: bun run test
 
   python:
     runs-on: ubuntu-latest
@@ -20,3 +36,11 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync --frozen
       - run: uvx ruff check .
+      - name: unit tests (rio-core)
+        run: cd packages/rio-core && uv run pytest -q
+      - name: unit tests (ai-engine)
+        run: cd services/ai-engine && ../../.venv/bin/python -m pytest tests -q
+      - name: build sandbox image
+        run: docker build -t sandbox-runner:latest -f services/sandbox-runner/Dockerfile .
+      - name: tests (sandbox-runner, incl. Docker E2E)
+        run: cd services/sandbox-runner && ../../.venv/bin/python -m pytest tests -q

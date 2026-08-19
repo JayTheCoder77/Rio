@@ -1,11 +1,14 @@
 [project]
-name = "rio-core"
-version = "0.0.0"
+name = "rio-review-core"
+version = "0.1.0"
+description = "Shared models, diff parsing, and code-chunking utilities for Rio, an automated code review tool."
+readme = "README.md"
+license = "ISC"
+authors = [{ name = "JayTheCoder77" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "langchain-text-splitters>=1.1.2",
     "pydantic>=2",
-    "pytest>=9.1.1",
     "unidiff>=0.7",
 ]
 
@@ -15,6 +18,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["rio_core"]
+
+[tool.hatch.build.targets.sdist]
+include = ["rio_core", "README.md", "LICENSE"]
 
 [dependency-groups]
 dev = [

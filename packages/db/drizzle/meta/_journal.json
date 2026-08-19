@@ -50,6 +50,20 @@
       "when": 1786707758015,
       "tag": "0006_dazzling_namor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787135591024,
+      "tag": "0007_pink_dreaming_celestial",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787136772539,
+      "tag": "0008_hesitant_secret_warriors",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,21 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 from rio_core import LintResult, RioConfig
 from rio_core.models import Finding, ParsedFile, RetrievedChunk
+
+
+class LlmCredential(BaseModel):
+    """The caller's BYOK provider credential, resolved server-side from their
+    Rio account (see `app.auth.get_user_llm_credential`) and attached to the
+    state before the graph runs. Never returned to the client — stripped out
+    in `main.py` before the response is sent. Field is named `llm_credential`
+    rather than `model_config`, which is a reserved attribute on every
+    Pydantic BaseModel."""
+
+    provider: Literal["groq", "openrouter"]
+    api_key: str
+    model: str
 
 
 class ReviewState(BaseModel):
@@ -11,6 +26,14 @@ class ReviewState(BaseModel):
     context : list[RetrievedChunk] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     lint_results: list[LintResult] = Field(default_factory=list)
+    llm_credential: LlmCredential | None = None
+    # Set only by the trusted worker path (see `app.auth.resolve_review_user`)
+    # — the GitHub App has no per-request Rio API key to authenticate with,
+    # so the worker instead asserts "run this review on behalf of this
+    # already-resolved Rio user id", authenticated via a separate internal
+    # service token rather than a user-facing Bearer key. Never returned to
+    # the client — stripped out in `main.py` before the response is sent.
+    on_behalf_of_user_id: str | None = None
 
 class IndexRepoRequest(BaseModel):
     repo_path : str

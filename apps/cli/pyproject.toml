@@ -1,9 +1,13 @@
 [project]
-name = "cli"
-version = "0.0.0"
+name = "rio-cli"
+version = "0.2.0"
+description = "Command-line client for Rio, an automated code review tool."
+readme = "README.md"
+license = "ISC"
+authors = [{ name = "JayTheCoder77" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "rio-core",
+    "rio-review-core>=0.1.0,<0.2.0",
     "httpx>=0.28.1",
     "rich>=15.0.0",
     "typer>=0.27.1",
@@ -13,8 +17,22 @@ dependencies = [
 [project.scripts]
 rio = "rio_cli.main:app"
 
+[project.urls]
+Homepage = "https://github.com/JayTheCoder77/rio"
+Repository = "https://github.com/JayTheCoder77/rio"
+
 [tool.uv.sources]
-rio-core = { workspace = true }
+rio-review-core = { workspace = true }
 
 [tool.uv]
 package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rio_cli"]
+
+[tool.hatch.build.targets.sdist]
+include = ["rio_cli", "README.md", "LICENSE"]

@@ -1,6 +1,6 @@
 import { eq, and, isNull, count, desc } from "drizzle-orm";
 import { db } from "./db";
-import { userInstallations, installations, repos, apiKeys, reviews, findings } from "./schema";
+import { userInstallations, installations, repos, apiKeys, reviews, findings, users } from "./schema";
 import type { DashboardRepo } from "@rio/shared-types";
 
 export interface ReviewStats {
@@ -57,6 +57,31 @@ export async function userHasInstallations(userId: string): Promise<boolean> {
     .limit(1);
 
   return !!row;
+}
+
+/**
+ * Resolves which Rio user's BYOK provider credential should power reviews
+ * for a given GitHub installation. `userInstallations` is many-to-many (a
+ * team's installation can have several linked Rio accounts, e.g. multiple
+ * teammates who each signed in via GitHub OAuth) — there's no single "owner"
+ * column. As a pragmatic default, this picks the *earliest-linked* user for
+ * that installation, i.e. whoever connected it first.
+ *
+ * Known tradeoff (accepted for now, not building around it yet): if that
+ * first-linked user's credential is missing/revoked, reviews for the whole
+ * installation fail closed — even if another linked teammate has their own
+ * valid key configured. Revisit if/when installation-level (rather than
+ * per-user) credentials are worth the schema change.
+ */
+export async function getInstallationOwnerId(installationDbId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ userId: userInstallations.userId })
+    .from(userInstallations)
+    .where(eq(userInstallations.installationId, installationDbId))
+    .orderBy(userInstallations.createdAt)
+    .limit(1);
+
+  return row?.userId ?? null;
 }
 
 export interface ApiKeySummary {
@@ -117,6 +142,73 @@ export async function revokeApiKey(params: { userId: string; keyId: string }): P
     .update(apiKeys)
     .set({ revokedAt: new Date() })
     .where(and(eq(apiKeys.id, params.keyId), eq(apiKeys.userId, params.userId)));
+}
+
+export interface ModelCredentialSummary {
+  provider: "groq" | "openrouter";
+  modelName: string;
+  lastFour: string;
+}
+
+/**
+ * The caller's BYOK provider credential, for display only — write-only past
+ * this point, same discipline as `ApiKeySummary`. The encrypted key itself
+ * is never returned; callers needing the last-4-chars display value must
+ * pass it in explicitly at write time (see `setUserModelCredential`), since
+ * it can't be recovered from the encrypted column afterward.
+ */
+export async function getUserModelCredentialSummary(userId: string): Promise<ModelCredentialSummary | null> {
+  const [row] = await db
+    .select({
+      modelProvider: users.modelProvider,
+      modelName: users.modelName,
+      modelApiKeyLastFour: users.modelApiKeyLastFour,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!row || !row.modelProvider || !row.modelName || !row.modelApiKeyLastFour) return null;
+
+  return {
+    provider: row.modelProvider,
+    modelName: row.modelName,
+    lastFour: row.modelApiKeyLastFour,
+  };
+}
+
+/** Saves (or overwrites) the caller's BYOK provider credential. Caller is
+ * responsible for encrypting `apiKeyEncrypted` before calling this — see
+ * `apps/web/lib/model-credentials.ts`. */
+export async function setUserModelCredential(params: {
+  userId: string;
+  provider: "groq" | "openrouter";
+  modelName: string;
+  apiKeyEncrypted: string;
+  lastFour: string;
+}): Promise<void> {
+  await db
+    .update(users)
+    .set({
+      modelProvider: params.provider,
+      modelName: params.modelName,
+      modelApiKeyEncrypted: params.apiKeyEncrypted,
+      modelApiKeyLastFour: params.lastFour,
+    })
+    .where(eq(users.id, params.userId));
+}
+
+/** Disconnects the caller's BYOK provider credential. */
+export async function clearUserModelCredential(userId: string): Promise<void> {
+  await db
+    .update(users)
+    .set({
+      modelProvider: null,
+      modelName: null,
+      modelApiKeyEncrypted: null,
+      modelApiKeyLastFour: null,
+    })
+    .where(eq(users.id, userId));
 }
 
 export async function getReviewStats(userId: string) {

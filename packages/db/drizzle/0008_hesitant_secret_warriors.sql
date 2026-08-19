@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "model_api_key_last_four" text;

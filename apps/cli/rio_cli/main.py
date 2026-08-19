@@ -1,5 +1,6 @@
 import typer
 
+from rio_cli.auth import auth as _auth
 from rio_cli.git import (
     _get_combined_diff,
     _get_committed_diff,
@@ -21,6 +22,11 @@ app = typer.Typer()
 @app.callback()
 def callback():
     pass
+
+@app.command()
+def auth():
+    """Authenticate the CLI with a Rio API key."""
+    _auth()
 
 def _resolve_diff(
     staged: bool,

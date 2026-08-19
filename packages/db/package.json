@@ -19,9 +19,11 @@
     "devDependencies": {
         "@types/node": "^26.1.1",
         "drizzle-kit": "^0.31.10",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "vitest": "^3.2.4"
     },
     "scripts": {
-        "check-types": "tsc --noEmit"
+        "check-types": "tsc --noEmit",
+        "test": "vitest run"
     }
 }

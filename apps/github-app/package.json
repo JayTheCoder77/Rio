@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc",
     "start": "bunx --bun probot run ./src/index.ts",
-    "test": "vitest",
+    "test": "vitest run",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {

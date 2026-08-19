@@ -15,6 +15,11 @@ export const reviewStatus = pgEnum('review_status', [
   'failed',
 ]);
 
+export const modelProvider = pgEnum('model_provider', [
+  'groq',
+  'openrouter',
+]);
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email'),
@@ -22,6 +27,18 @@ export const users = pgTable('users', {
   image: text('image'),
   emailVerified: timestamp('email_verified'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  // BYOK: the user's own Groq/OpenRouter key, powering both the GitHub App
+  // review path and the CLI (`rio auth` identifies the Rio account; the LLM
+  // credential for that account lives here, not in a separate table — this
+  // is a strict 1:1 fact about a user, same pattern as accounts.access_token
+  // living directly on that row).
+  modelProvider: modelProvider('model_provider'),
+  modelName: text('model_name'),
+  modelApiKeyEncrypted: text('model_api_key_encrypted'),
+  // Last 4 chars of the plaintext provider key, for display only (mirrors
+  // apiKeys.lastFour) — can't be recovered from the encrypted column after
+  // the fact, so it's captured separately at write time.
+  modelApiKeyLastFour: text('model_api_key_last_four'),
 });
 
 export const accounts = pgTable(

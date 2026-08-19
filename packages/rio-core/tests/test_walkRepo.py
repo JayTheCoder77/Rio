@@ -35,3 +35,25 @@ def test_walk_repo_skips_binary_files(tmp_path):
 
     assert "image.bin" not in results
     assert "readme.txt" in results
+
+
+def test_walk_repo_respects_max_file_bytes(tmp_path):
+    (tmp_path / "small.py").write_text("print('hi')")
+    (tmp_path / "huge.py").write_text("x" * 1000)
+
+    results = dict(walk_repo(str(tmp_path), max_file_bytes=500))
+
+    assert "small.py" in results
+    assert "huge.py" not in results
+
+
+def test_walk_repo_empty_dir_returns_empty(tmp_path):
+    assert walk_repo(str(tmp_path)) == []
+
+
+def test_walk_repo_returns_relative_paths(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "index.py").write_text("print('x')")
+
+    paths = [p for p, _ in walk_repo(str(tmp_path))]
+    assert paths == ["src/index.py"]

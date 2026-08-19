@@ -1,18 +1,39 @@
 import fnmatch
 
-from langchain_ollama import ChatOllama, OllamaEmbeddings
+from langchain_ollama import OllamaEmbeddings
+from langchain_openai import ChatOpenAI
+from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel
 from rio_core.config import SEVERITY_RANK
 from rio_core.diff import parse_diff
 from rio_core.models import Finding, RetrievedChunk
 
 from app.indexing import index
-from app.state import ReviewState
+from app.state import LlmCredential, ReviewState
 from app.utils.utils import format_context
 
 MAX_DIFF_CHARS = 40_000  # rough token-cost guardrail — tune once real PRs start flowing
 MAX_CONTEXT_CHARS = 5000
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+PROVIDER_BASE_URLS = {
+    "groq": "https://api.groq.com/openai/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+}
+
+PROVIDER_DISPLAY_NAMES = {
+    "groq": "Groq",
+    "openrouter": "OpenRouter",
+}
+
+
+class ProviderCredentialError(RuntimeError):
+    """Raised when the caller's BYOK provider (Groq/OpenRouter) rejects the
+    request — bad model name, revoked/invalid key, rate limit, etc. Distinct
+    from a generic crash: `main.py` catches this and returns a clear 4xx
+    instead of an opaque 500, so the CLI and the GitHub App failure comment
+    can both show the user something actionable."""
+
 
 def ingest(state: ReviewState) -> dict:
     if len(state.diff) > MAX_DIFF_CHARS:
@@ -28,8 +49,18 @@ def ingest(state: ReviewState) -> dict:
 class FindingsResponse(BaseModel):
     findings: list[Finding]
 
-llm = ChatOllama(model="llama3.1:latest", temperature=0)
-structured_llm = llm.with_structured_output(FindingsResponse)
+def build_llm(credential: LlmCredential) -> ChatOpenAI:
+    """Builds a fresh, per-request LLM client from the caller's BYOK
+    provider credential. Both Groq and OpenRouter expose OpenAI-compatible
+    chat endpoints, so one `ChatOpenAI` class covers both — only the
+    base_url, api_key, and model name differ per provider. No client is ever
+    cached or shared across requests/users."""
+    return ChatOpenAI(
+        base_url=PROVIDER_BASE_URLS[credential.provider],
+        api_key=credential.api_key,
+        model=credential.model,
+        temperature=0,
+    )
 
 REVIEW_SYSTEM_PROMPT = """You are Rio, an automated code reviewer. You are given a unified diff \
 of a pull request and must find real, actionable issues introduced by the changes.
@@ -64,16 +95,84 @@ For each finding, give:
 """
 
 def review(state: ReviewState) -> dict:
+    if state.llm_credential is None:
+        # Fail closed — no shared/self-hosted fallback. Reaching this node
+        # without a resolved BYOK credential means `review_endpoint` didn't
+        # do its job; surfacing that as a clear error here is a second line
+        # of defense, not the primary check (that's `require_current_user` +
+        # the DB lookup in main.py, which should reject the request before
+        # the graph ever runs).
+        raise ValueError(
+            "No LLM provider credential configured for this account. "
+            "Connect a Groq or OpenRouter key in the Rio dashboard settings."
+        )
+
+    llm = build_llm(state.llm_credential)
+    structured_llm = llm.with_structured_output(FindingsResponse)
+
     human_message = f"""## Retrieved context from the repository
                         {format_context(state.context)}
                         ## Diff to review
                         {state.diff}"""
-    response: FindingsResponse = structured_llm.invoke(
-        [
-            ("system", REVIEW_SYSTEM_PROMPT),
-            ("human", human_message),
-        ]
-    )
+    provider_name = PROVIDER_DISPLAY_NAMES[state.llm_credential.provider]
+    model_name = state.llm_credential.model
+    try:
+        response: FindingsResponse = structured_llm.invoke(
+            [
+                ("system", REVIEW_SYSTEM_PROMPT),
+                ("human", human_message),
+            ]
+        )
+    except APIStatusError as exc:
+        # Covers a bad/nonexistent model name (404), a malformed request
+        # (400), a revoked/invalid provider key (401), and rate limits (429)
+        # — all surfaced with the provider's own message rather than a raw
+        # traceback, so the user can tell *what* to fix in their settings.
+        if exc.status_code in (401, 403):
+            raise ProviderCredentialError(
+                f"{provider_name} rejected the configured API key "
+                f"(status {exc.status_code}). It may be invalid or revoked — "
+                "reconnect your key in the Rio dashboard settings."
+            ) from exc
+        if exc.status_code == 404:
+            raise ProviderCredentialError(
+                f"{provider_name} could not find the model '{model_name}'. "
+                "Check the model name in your Rio dashboard settings."
+            ) from exc
+        raise ProviderCredentialError(
+            f"{provider_name} rejected the request (status {exc.status_code}): "
+            f"{exc.message}"
+        ) from exc
+    except APIConnectionError as exc:
+        raise ProviderCredentialError(
+            f"Could not reach {provider_name} — the provider may be down, or there's "
+            "a network issue between Rio and the provider."
+        ) from exc
+    except ValueError as exc:
+        # OpenRouter-specific: a mid-generation upstream provider failure
+        # (e.g. the specific model backend crashed or disconnected) can come
+        # back as an HTTP 200 with the error embedded in `choices[0].error`
+        # instead of a raised HTTP error — no APIStatusError is ever raised
+        # for this case. langchain_openai drops that embedded error dict
+        # while parsing, but preserves `finish_reason: "error"` in
+        # `response_metadata`, and `.with_structured_output()` then fails
+        # with a generic "no 'parsed' field" ValueError since there's no
+        # real content to parse. Detect that specific shape narrowly (by
+        # checking for the finish_reason marker) so this doesn't swallow
+        # unrelated ValueErrors from elsewhere in the invoke chain.
+        response_message = getattr(exc, "args", [None])[0]
+        finish_reason = None
+        if isinstance(response_message, str) and "'finish_reason': 'error'" in response_message:
+            finish_reason = "error"
+        if finish_reason == "error":
+            raise ProviderCredentialError(
+                f"{provider_name} could not complete this request — the upstream "
+                f"model provider for '{model_name}' failed mid-generation. This is "
+                "usually transient; try again, or check the model's status on "
+                f"{provider_name}."
+            ) from exc
+        raise
+
     min_rank = SEVERITY_RANK[state.config.min_severity]
     filtered = [f for f in response.findings if SEVERITY_RANK[f.severity] >= min_rank]
 

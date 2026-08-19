@@ -3,18 +3,20 @@ name = "ai-engine"
 version = "0.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "rio-core",
+    "rio-review-core",
     "fastapi[standard]",
     "uvicorn[standard]",
     "langgraph",
     "langchain-ollama",
+    "langchain-openai>=0.4.0",
     "langchain-text-splitters>=1.1.2",
     "pydantic>=2",
     "pinecone>=9.1.0",
     "python-dotenv>=1.2.2",
     "psycopg[binary]>=3.3.4",
     "mcp>=2.0.0,<3",
+    "cryptography>=44.0.0",
 ]
 
 [tool.uv.sources]
-rio-core = { workspace = true }
+rio-review-core = { workspace = true }

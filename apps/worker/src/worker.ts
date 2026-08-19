@@ -5,13 +5,21 @@ import path from "node:path";
 import type { PrReviewJob } from '@rio/shared-types';
 import { Octokit } from 'octokit';
 import { createAppAuth } from "@octokit/auth-app";
-import { db, repos, reviews, findings, installations } from "@rio/db";
+import { db, repos, reviews, findings, installations, getInstallationOwnerId } from "@rio/db";
 import { eq, and } from "drizzle-orm";
 import YAML from 'yaml';
 import { cloneRepo } from './clone';
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") }); // root: REDIS_URL
-dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY
+dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY, INTERNAL_SERVICE_TOKEN
+
+if (!process.env.INTERNAL_SERVICE_TOKEN) {
+    throw new Error(
+        "INTERNAL_SERVICE_TOKEN is not set. This worker authenticates to ai-engine's " +
+        "/v1/review as a trusted internal caller (not a per-user Rio API key) — see " +
+        "app.auth.verify_internal_service_token in services/ai-engine."
+    );
+}
 
 const connection = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
 
@@ -42,17 +50,27 @@ async function fetchRioConfig(
     }
 }
 
+/** A known, specific failure (bad model name, revoked provider key, etc.)
+ * where automatically retrying the same job would just fail identically —
+ * distinct from transient errors (network blips, rate limits) where the
+ * generic "will retry automatically" comment is still accurate. */
+class NonRetryableReviewError extends Error { }
+
 async function postFailureComment(
     octokit: Octokit,
     owner: string,
     repoName: string,
     prNumber: number,
+    reason?: string,
 ) {
+    const body = reason
+        ? `⚠️ Rio review failed for this commit: ${reason}\n\n<!-- rio-failure -->`
+        : "⚠️ Rio review failed for this commit — will retry automatically.\n\n<!-- rio-failure -->";
     await octokit.rest.issues.createComment({
         owner,
         repo: repoName,
         issue_number: prNumber,
-        body: "⚠️ Rio review failed for this commit — will retry automatically.\n\n<!-- rio-failure -->",
+        body,
     });
 }
 
@@ -127,6 +145,19 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
         .where(eq(repos.githubRepoId, githubRepoId))
         .limit(1);
 
+    const [inst] = await db.select({ id: installations.id })
+        .from(installations)
+        .where(eq(installations.githubInstallationId, installationId))
+        .limit(1);
+
+    if (!inst) throw new Error(`Installation ${installationId} not found`);
+
+    // BYOK: resolve which Rio user's provider credential powers this review.
+    // See `getInstallationOwnerId` for the "earliest-linked user" tradeoff —
+    // this is a known simplification, not a full multi-user-per-installation
+    // credential model.
+    const onBehalfOfUserId = await getInstallationOwnerId(inst.id);
+
     try {
         const { data: diff } = await octokit.rest.pulls.get({
             owner,
@@ -151,17 +182,31 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             // clone failed — proceed without sandbox corroboration
         }
 
+        if (!onBehalfOfUserId) {
+            throw new Error(
+                `No Rio user linked to installation ${installationId} — cannot resolve a BYOK credential.`
+            );
+        }
+
         const res = await fetch(`${process.env.AI_ENGINE_URL ?? "http://localhost:8000"}/v1/review`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-Internal-Service-Token": process.env.INTERNAL_SERVICE_TOKEN!,
+            },
             body: JSON.stringify({
                 diff: diff as unknown as string,
                 repo_id: existingRepoRow?.id,
+                on_behalf_of_user_id: onBehalfOfUserId,
                 ...(rioConfig ? { config: rioConfig } : {}),
                 lint_results: lintResults,
             }),
         });
 
+        if (res.status === 412 || res.status === 422) {
+            const { detail } = await res.json() as { detail: string };
+            throw new NonRetryableReviewError(detail);
+        }
         if (!res.ok) {
             throw new Error(`ai-engine returned ${res.status}`);
         }
@@ -206,13 +251,6 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             })
         }
 
-        const [inst] = await db.select({ id: installations.id })
-            .from(installations)
-            .where(eq(installations.githubInstallationId, installationId))
-            .limit(1);
-
-        if (!inst) throw new Error(`Installation ${installationId} not found`);
-
         const [repoRow] = await db.insert(repos)
             .values({ installationId: inst.id, githubRepoId, fullName: repo })
             .onConflictDoUpdate({
@@ -248,7 +286,8 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
 
     } catch (err) {
         try {
-            await postFailureComment(octokit, owner, repoName, prNumber);
+            const reason = err instanceof NonRetryableReviewError ? err.message : undefined;
+            await postFailureComment(octokit, owner, repoName, prNumber, reason);
         } catch (commentErr) {
             console.error("Failed to post failure comment:", commentErr);
         }

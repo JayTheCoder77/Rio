@@ -3,13 +3,13 @@ name = "sandbox-runner"
 version = "0.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "rio-core",
+    "rio-review-core",
     "fastapi[standard]",
     "uvicorn[standard]",
 ]
 
 [tool.uv.sources]
-rio-core = { workspace = true }
+rio-review-core = { workspace = true }
 
 [tool.fastapi]
 entrypoint = "app.main:app"

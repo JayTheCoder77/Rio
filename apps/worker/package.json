@@ -5,7 +5,8 @@
   "scripts": {
     "start:review": "bun run src/worker.ts",
     "start:index": "bun run src/indexWorker.ts",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@octokit/auth-app": "^8.2.0",
@@ -21,7 +22,8 @@
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "@types/node": "^24.0.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   },
   "type": "module"
 }

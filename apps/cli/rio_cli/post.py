@@ -7,11 +7,12 @@ from rio_cli.utils import _fail
 
 
 def _post_review(diff_text : str) -> list[Finding]:
-    headers : dict = {}
     api_key = get_api_key()
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    
+    if not api_key:
+        _fail("Error: not authenticated. Run `rio auth` first.")
+
+    headers = {"Authorization": f"Bearer {api_key}"}
+
     rio_config = load_rio_config()
     ai_engine_url = get_ai_engine_url()
     try:
@@ -26,7 +27,13 @@ def _post_review(diff_text : str) -> list[Finding]:
     
     except httpx.TimeoutException:
         _fail("Error: ai-engine request timed out.")
-    
+
+    if response.status_code == 401:
+        _fail("Error: not authenticated. Run `rio auth` first.")
+    if response.status_code == 412:
+        _fail(f"Error: {response.json().get('detail', response.text)}")
+    if response.status_code == 422:
+        _fail(f"Error: {response.json().get('detail', response.text)}")
     if response.status_code != 200:
         _fail(f"Error: ai-engine returned {response.status_code}: {response.text}")
     
