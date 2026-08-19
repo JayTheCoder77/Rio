@@ -1,7 +1,10 @@
-import { $ } from "bun";
 import os from "node:os";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const runGit = promisify(execFile);
 
 export async function cloneRepo(
     owner : string,
@@ -13,10 +16,10 @@ export async function cloneRepo(
     const url = `https://x-access-token:${token}@github.com/${owner}/${repoName}.git`;
 
     try {
-        await $`git init`.cwd(dir).quiet();
-        await $`git remote add origin ${url}`.cwd(dir).quiet();
-        await $`git fetch --depth=1 origin ${sha}`.cwd(dir).quiet();
-        await $`git checkout ${sha}`.cwd(dir).quiet();
+        await runGit("git" , ["init"] , {cwd : dir});
+        await runGit("git" , ["remote" , "add" , "origin" , url] , {cwd : dir});
+        await runGit("git" , ["fetch" , "--depth=1" , "origin" , sha] , {cwd : dir});
+        await runGit("git" , ["checkout" , sha] , {cwd : dir});
     }
     catch(err){
         await fs.rm(dir , {recursive : true , force : true});

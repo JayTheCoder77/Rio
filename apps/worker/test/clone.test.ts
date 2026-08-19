@@ -4,34 +4,26 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  commands: [] as string[],
+  calls: [] as { cmd: string; args: string[]; cwd: string }[],
   failAt: -1,
-  $: null as unknown,
 }));
 
-vi.mock("bun", () => {
-  const exec = (cmd: string) => {
-    state.commands.push(cmd);
-    const idx = state.commands.length - 1;
+vi.mock("node:child_process", () => ({
+  execFile: (
+    cmd: string,
+    args: string[],
+    opts: { cwd: string },
+    cb: (err?: Error | null, stdout?: string, stderr?: string) => void,
+  ) => {
+    state.calls.push({ cmd, args, cwd: opts?.cwd });
+    const idx = state.calls.length - 1;
     if (state.failAt >= 0 && idx === state.failAt) {
-      return Promise.reject(new Error(`command failed: ${cmd}`));
+      cb(new Error(`command failed: ${cmd} ${args.join(" ")}`));
+    } else {
+      cb(null, "", "");
     }
-    return Promise.resolve();
-  };
-  state.$ = (strings: TemplateStringsArray, ...values: unknown[]) => {
-    const cmd = strings
-      .map((s, i) => s + (values[i] ?? ""))
-      .join("")
-      .trim();
-    const run = () => exec(cmd);
-    const thenable = { then: (res: () => void, rej: (e: Error) => void) => run().then(res, rej) };
-    return {
-      cwd: () => ({ quiet: () => thenable }),
-      quiet: () => thenable,
-    };
-  };
-  return { $: state.$ };
-});
+  },
+}));
 
 import { cloneRepo } from "../src/clone";
 
@@ -43,14 +35,14 @@ async function leftoverCloneDirs(): Promise<string[]> {
 
 describe("cloneRepo", () => {
   beforeEach(() => {
-    state.commands = [];
+    state.calls = [];
     state.failAt = -1;
   });
 
   it("runs the git command sequence in order and returns a cleanup that removes the dir", async () => {
     const { path: dir, cleanup } = await cloneRepo("org-a", "repo-b", "abc123", "tok");
 
-    expect(state.commands).toEqual([
+    expect(state.calls.map((c) => [c.cmd, ...c.args].join(" "))).toEqual([
       "git init",
       "git remote add origin https://x-access-token:tok@github.com/org-a/repo-b.git",
       "git fetch --depth=1 origin abc123",
