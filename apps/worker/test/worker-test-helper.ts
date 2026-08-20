@@ -127,6 +127,14 @@ export async function runHandler() {
   return handler(JOB);
 }
 
+// worker.ts validates required env vars at module scope and CI has no .env
+// file (it's gitignored), so provide test values before loading it. `??=`
+// leaves anything already set (local .env via dotenv) untouched.
+process.env.DATABASE_URL ??= "postgres://rio:rio@localhost:5432/rio_test";
+process.env.INTERNAL_SERVICE_TOKEN ??= "test-internal-token";
+process.env.PRIVATE_KEY ??= "test-private-key";
+process.env.APP_ID ??= "test-app-id";
+
 // Ensures worker.ts is loaded into the module graph so its module-scope
 // `new Worker(...)` executes and captures the processor.
-import "../src/worker";
+await import("../src/worker");

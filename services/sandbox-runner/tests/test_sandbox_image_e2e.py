@@ -24,7 +24,11 @@ REPO_FILES = {
 def test_sandbox_image_end_to_end(tmp_path):
     # Build a fixture repo on the host; the container mounts it at /workspace.
     for name, content in REPO_FILES.items():
-        (tmp_path / name).write_text(content)
+        p = tmp_path / name
+        p.write_text(content)
+        # The container runs as the unprivileged `sandbox` user, so the files
+        # must be world-readable regardless of the host's umask.
+        p.chmod(0o644)
 
     payload = json.dumps({
         "repo_path": "/workspace",
@@ -49,9 +53,9 @@ def test_sandbox_image_end_to_end(tmp_path):
 
     tools = {(lr.file, lr.tool, lr.rule_id) for lr in output.lint_results}
     # ruff finds the unused import on fix.py.
-    assert ("fix.py", "ruff", "F401") in tools
+    assert ("fix.py", "ruff", "F401") in tools, output.model_dump_json()
     # eslint finds the unused var on app.js (flat config — the whole point of
     # the hand-rolled runner over MegaLinter's bundled ESLint).
-    assert ("app.js", "eslint", "no-unused-vars") in tools
+    assert ("app.js", "eslint", "no-unused-vars") in tools, output.model_dump_json()
     # The .go file is not handled by the own-image runners.
     assert output.unhandled_files == ["main.go"]
