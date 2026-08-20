@@ -1,4 +1,6 @@
 import fnmatch
+import logging
+import os
 
 from langchain_ollama import OllamaEmbeddings
 from langchain_openai import ChatOpenAI
@@ -8,11 +10,15 @@ from rio_core.config import SEVERITY_RANK
 from rio_core.diff import parse_diff
 from rio_core.models import Finding, RetrievedChunk
 
-from app.indexing import index
+from app.indexing import get_embeddings, get_index
 from app.state import LlmCredential, ReviewState
 from app.utils.utils import format_context
 
-MAX_DIFF_CHARS = 40_000  # rough token-cost guardrail — tune once real PRs start flowing
+logger = logging.getLogger(__name__)
+
+# Rough token-cost guardrail. Tune per deployment via the MAX_DIFF_CHARS env
+# var (set lower in prod if you want stricter caps) rather than editing code.
+MAX_DIFF_CHARS = int(os.getenv("MAX_DIFF_CHARS", "40000"))
 MAX_CONTEXT_CHARS = 5000
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
@@ -35,9 +41,19 @@ class ProviderCredentialError(RuntimeError):
     can both show the user something actionable."""
 
 
+class DiffTooLargeError(RuntimeError):
+    """Raised when the diff exceeds MAX_DIFF_CHARS. `main.py` catches this and
+    returns a 422 so callers get a clear, actionable message instead of a raw
+    500 from an unhandled ValueError."""
+
+
 def ingest(state: ReviewState) -> dict:
     if len(state.diff) > MAX_DIFF_CHARS:
-        raise ValueError(f"diff too large ({len(state.diff)} chars) — cap is {MAX_DIFF_CHARS}")
+        raise DiffTooLargeError(
+            f"diff too large ({len(state.diff)} chars) — cap is {MAX_DIFF_CHARS}. "
+            "Review a smaller scope (e.g. `rio review --staged`), or raise the "
+            "ai-engine's MAX_DIFF_CHARS env var for your deployment."
+        )
     
     parsed_files = parse_diff(state.diff)
     filtered_files = [
@@ -92,6 +108,10 @@ For each finding, give:
 - severity: one of "critical", "warning", "info"
 - message: a one-sentence description of the issue
 - rationale: a short explanation of why it matters and, where useful, how to fix it
+
+Respond with ONLY a single valid JSON object matching the FindingsResponse schema \
+({"findings": [...]}) — no markdown code fences (no ```json blocks), no surrounding \
+text or explanation.
 """
 
 def review(state: ReviewState) -> dict:
@@ -108,7 +128,13 @@ def review(state: ReviewState) -> dict:
         )
 
     llm = build_llm(state.llm_credential)
-    structured_llm = llm.with_structured_output(FindingsResponse)
+    # Function calling, not free-form JSON: the provider constrains the model
+    # to emit a tool call against the FindingsResponse schema, so it can't
+    # write prose or a fenced JSON block. langchain parses the tool arguments
+    # (fence-tolerant via parse_json_markdown) and validates them into the
+    # pydantic model. A missing/broken tool call surfaces as
+    # OutputParserException (a ValueError) or ValidationError below.
+    structured_llm = llm.with_structured_output(FindingsResponse, method="function_calling")
 
     human_message = f"""## Retrieved context from the repository
                         {format_context(state.context)}
@@ -149,29 +175,16 @@ def review(state: ReviewState) -> dict:
             "a network issue between Rio and the provider."
         ) from exc
     except ValueError as exc:
-        # OpenRouter-specific: a mid-generation upstream provider failure
-        # (e.g. the specific model backend crashed or disconnected) can come
-        # back as an HTTP 200 with the error embedded in `choices[0].error`
-        # instead of a raised HTTP error — no APIStatusError is ever raised
-        # for this case. langchain_openai drops that embedded error dict
-        # while parsing, but preserves `finish_reason: "error"` in
-        # `response_metadata`, and `.with_structured_output()` then fails
-        # with a generic "no 'parsed' field" ValueError since there's no
-        # real content to parse. Detect that specific shape narrowly (by
-        # checking for the finish_reason marker) so this doesn't swallow
-        # unrelated ValueErrors from elsewhere in the invoke chain.
-        response_message = getattr(exc, "args", [None])[0]
-        finish_reason = None
-        if isinstance(response_message, str) and "'finish_reason': 'error'" in response_message:
-            finish_reason = "error"
-        if finish_reason == "error":
-            raise ProviderCredentialError(
-                f"{provider_name} could not complete this request — the upstream "
-                f"model provider for '{model_name}' failed mid-generation. This is "
-                "usually transient; try again, or check the model's status on "
-                f"{provider_name}."
-            ) from exc
-        raise
+        # Covers langchain's OutputParserException (missing/broken tool call)
+        # and pydantic ValidationError (malformed args) — both ValueError
+        # subclasses — so an unparseable model response is a clean 4xx, not a 500.
+        logger.warning(
+            "unparseable model response (%s: %s)", type(exc).__name__, exc
+        )
+        raise ProviderCredentialError(
+            f"{provider_name} returned a response that could not be parsed as a "
+            f"review (model '{model_name}'). This is usually transient; try again."
+        ) from exc
 
     min_rank = SEVERITY_RANK[state.config.min_severity]
     filtered = [f for f in response.findings if SEVERITY_RANK[f.severity] >= min_rank]
@@ -185,29 +198,37 @@ def enrich(state : ReviewState) -> dict:
         return {"context": []}
     all_candidates : list[RetrievedChunk] = []
 
-    for pf in state.parsed_files:
-        query_text = "\n".join(pf.added_lines.values())
-        if not query_text.strip():
-            continue
-
-        vector = embeddings.embed_query(query_text)
-        results = index.query(
-            vector=vector,
-            top_k=3,
-            namespace=state.repo_id,
-            include_metadata=True
-        )
-
-        for match in results.matches:
-            if match.metadata["file_path"] == pf.path:
+    try:
+        for pf in state.parsed_files:
+            query_text = "\n".join(pf.added_lines.values())
+            if not query_text.strip():
                 continue
-            all_candidates.append(RetrievedChunk(
-                file_path=match.metadata["file_path"],
-                start_line=match.metadata["start_line"],
-                end_line=match.metadata["end_line"],
-                text=match.metadata["text"],
-                score=match.score, 
-            ))
+
+            vector = get_embeddings().embed_query(query_text)
+            results = get_index().query(
+                vector=vector,
+                top_k=3,
+                namespace=state.repo_id,
+                include_metadata=True
+            )
+
+            for match in results.matches:
+                if match.metadata["file_path"] == pf.path:
+                    continue
+                all_candidates.append(RetrievedChunk(
+                    file_path=match.metadata["file_path"],
+                    start_line=match.metadata["start_line"],
+                    end_line=match.metadata["end_line"],
+                    text=match.metadata["text"],
+                    score=match.score, 
+                ))
+    except Exception as exc:  # noqa: BLE001 — deliberate: degrade on any provider/network failure
+        # Context retrieval is best-effort — it only informs the review and
+        # is never cited directly. If Pinecone or the embedding service is
+        # unreachable (or not yet configured), degrade to no context rather
+        # than failing the whole review.
+        logger.warning("context retrieval skipped: %s", exc)
+        return {"context": []}
         
     all_candidates.sort(key=lambda c: c.score, reverse=True)
   

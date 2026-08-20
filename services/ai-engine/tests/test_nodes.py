@@ -40,8 +40,9 @@ class FakeLLM:
     def __init__(self, outcome):
         self.structured = FakeStructuredLLM(outcome)
 
-    def with_structured_output(self, schema):
+    def with_structured_output(self, schema, method="function_calling"):
         assert schema.__name__ == "FindingsResponse"
+        assert method == "function_calling"
         return self.structured
 
 
@@ -84,8 +85,10 @@ class TestIngest:
         assert [pf.path for pf in out["parsed_files"]] == ["tests/a.py"]
 
     def test_raises_on_oversized_diff(self):
+        from app.nodes import DiffTooLargeError
+
         big = "a" * (40_000 + 1)
-        with pytest.raises(ValueError, match="diff too large"):
+        with pytest.raises(DiffTooLargeError, match="diff too large"):
             ingest(ReviewState(diff=big))
 
 
@@ -225,17 +228,18 @@ class TestReview:
         with pytest.raises(ProviderCredentialError, match="Could not reach Groq"):
             review(self._state())
 
-    def test_openrouter_finish_reason_error(self, monkeypatch):
-        # Simulates langchain_openai's ValueError message carrying the
-        # finish_reason marker from an OpenRouter 200-with-embedded-error.
-        err = ValueError("Expected 'parsed' field but got ... 'finish_reason': 'error' ...")
-        patch_llm(monkeypatch, err)
-        with pytest.raises(ProviderCredentialError, match="failed mid-generation"):
+    def test_unparseable_output_maps_to_provider_error(self, monkeypatch):
+        # Simulates langchain raising OutputParserException (a ValueError) when
+        # the model returns no usable tool call — must be a clean 4xx, not a 500.
+        patch_llm(monkeypatch, ValueError("Expected but did not find tool call"))
+        with pytest.raises(ProviderCredentialError, match="could not be parsed"):
             review(self._state())
 
-    def test_unrelated_value_error_propagates(self, monkeypatch):
-        patch_llm(monkeypatch, ValueError("something entirely unrelated"))
-        with pytest.raises(ValueError, match="something entirely unrelated"):
+    def test_bare_value_error_maps_cleanly(self, monkeypatch):
+        # A ValueError() with no message (args=()) used to crash the old handler
+        # with IndexError — now it is swallowed into the same clean 4xx.
+        patch_llm(monkeypatch, ValueError())
+        with pytest.raises(ProviderCredentialError, match="could not be parsed"):
             review(self._state())
 
 
@@ -267,12 +271,12 @@ class TestEnrich:
                     FakeMatch("f.py", 1, 2, "self", 0.99),
                 ]})()
 
-        # Instance-level attribute (not a class) so it is not bound as a method.
+        # Patch the getters (not bound module names — clients are lazy now).
         monkeypatch.setattr(
-            "app.nodes.embeddings",
-            SimpleNamespace(embed_query=lambda text: [0.1, 0.2, 0.3]),
+            "app.nodes.get_embeddings",
+            lambda: SimpleNamespace(embed_query=lambda text: [0.1, 0.2, 0.3]),
         )
-        monkeypatch.setattr("app.nodes.index", FakeIndex())
+        monkeypatch.setattr("app.nodes.get_index", lambda: FakeIndex())
 
         state = ReviewState(
             diff="",
@@ -282,3 +286,18 @@ class TestEnrich:
         context = enrich(state)["context"]
         assert len(context) == 1
         assert context[0].file_path == "other.py"
+
+    def test_retrieval_failure_degrades_to_empty_context(self, monkeypatch):
+        from rio_core.models import ParsedFile
+
+        def boom_embeddings():
+            raise RuntimeError("ollama not running")
+
+        monkeypatch.setattr("app.nodes.get_embeddings", boom_embeddings)
+
+        state = ReviewState(
+            diff="",
+            repo_id="repo-1",
+            parsed_files=[ParsedFile(path="f.py", added_lines={1: "same text\n"})],
+        )
+        assert enrich(state) == {"context": []}

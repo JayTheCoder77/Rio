@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import { getUserModelCredentialSummary } from "@rio/db";
@@ -35,12 +36,9 @@ export default async function SettingsPage() {
         <CardContent>
           <div className="flex items-center gap-4">
             {image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={image}
-                alt=""
-                className="size-14 shrink-0 rounded-full border border-border"
-              />
+              <div className="relative size-14 shrink-0 overflow-hidden rounded-full border border-border">
+                <Image src={image} alt="" fill sizes="56px" className="object-cover" />
+              </div>
             ) : (
               <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
                 {(name ?? email ?? "?").slice(0, 2).toUpperCase()}
@@ -48,7 +46,7 @@ export default async function SettingsPage() {
             )}
             <div>
               <p className="text-sm font-medium">{name ?? "Unknown"}</p>
-              <p className="text-sm text-muted-foreground">{email ?? "No email"}</p>
+              {/* <p className="text-sm text-muted-foreground">{email ?? "No email"}</p> */}
             </div>
           </div>
         </CardContent>

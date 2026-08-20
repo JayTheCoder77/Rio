@@ -23,7 +23,27 @@ loadFromRootEnv("DATABASE_URL");
 loadFromRootEnv("ENCRYPTION_KEY");
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
+    ],
+  },
+  async headers() {
+    return [
+      {
+        // The demo video is replaced in place (same filename) whenever it's
+        // re-recorded. Never let browsers cache it, or a stale 49MB clip
+        // keeps playing until they hard-refresh.
+        source: "/rio-cli.mp4",
+        headers: [
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

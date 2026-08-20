@@ -1,5 +1,5 @@
 import React from "react";
-import { VideoPlaceholder } from "@/components/marketing/video-placeholder";
+import { BubbleBackground } from "@/components/animate-ui/components/backgrounds/bubble";
 
 export default function AuthLayout({
   children,
@@ -8,9 +8,9 @@ export default function AuthLayout({
 }) {
   return (
     <div className="grid min-h-screen bg-background lg:grid-cols-2">
-      {/* Left: product demo video placeholder (hidden on mobile) */}
-      <div className="hidden border-r border-border p-8 lg:block">
-        <VideoPlaceholder label="Login page video placeholder" />
+      {/* Left: animated bubble background (hidden on mobile) */}
+      <div className="hidden border-r border-border lg:block">
+        <BubbleBackground interactive className="h-full" />
       </div>
 
       {/* Right: login content, vertically centered */}

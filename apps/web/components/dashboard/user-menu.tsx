@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { LogOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -39,12 +41,9 @@ export function UserMenu({
         )}
       >
         {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image}
-            alt=""
-            className="size-8 shrink-0 rounded-full border border-sidebar-border"
-          />
+          <div className="relative size-8 shrink-0 overflow-hidden rounded-full border border-sidebar-border">
+            <Image src={image} alt="" fill sizes="32px" className="object-cover" />
+          </div>
         ) : (
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-medium text-sidebar-primary-foreground">
             {getInitials(name, email)}

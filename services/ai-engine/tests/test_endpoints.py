@@ -139,6 +139,23 @@ class TestReview:
         assert resp.status_code == 422
         assert "could not find the model" in resp.json()["detail"]
 
+    def test_diff_too_large_422(self, client, monkeypatch):
+        override_user("u-1")
+        override_internal(False)
+        override_credential(monkeypatch, CREDENTIAL)
+
+        # Run the real graph (no review_graph mock): ingest() raises
+        # DiffTooLargeError before any node touches the network.
+        from app import nodes
+
+        monkeypatch.setattr(nodes, "MAX_DIFF_CHARS", 100)
+
+        big_diff = DIFF + "+" + "a" * 500
+        resp = client.post("/v1/review", json={"diff": big_diff})
+        assert resp.status_code == 422
+        assert "diff too large" in resp.json()["detail"]
+        assert "MAX_DIFF_CHARS" in resp.json()["detail"]
+
     def test_happy_path_returns_findings_and_strips_credential(self, client, monkeypatch):
         override_user("u-1")
         override_internal(False)

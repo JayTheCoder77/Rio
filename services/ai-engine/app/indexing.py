@@ -25,6 +25,16 @@ def _ensure_clients() -> None:
         embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
 
+def get_embeddings() -> OllamaEmbeddings:
+    _ensure_clients()
+    return embeddings
+
+
+def get_index():
+    _ensure_clients()
+    return index
+
+
 BATCH_SIZE=100
 
 def index_repo(repo_path : str , repo_id : str) -> int:
@@ -34,11 +44,9 @@ def index_repo(repo_path : str , repo_id : str) -> int:
     for path,content in walk_repo(repo_path):
         all_chunks.extend(chunk_file(path , content))
 
-    _ensure_clients()
-
     for batch in batched(all_chunks , BATCH_SIZE):
         texts = [chunk.text for chunk in batch]
-        vectors = embeddings.embed_documents(texts)
+        vectors = get_embeddings().embed_documents(texts)
 
         to_upsert = []
         for chunk , vector in zip(batch , vectors):
@@ -54,7 +62,7 @@ def index_repo(repo_path : str , repo_id : str) -> int:
                 }
             })
 
-        index.upsert(vectors=to_upsert , namespace=repo_id)
+        get_index().upsert(vectors=to_upsert , namespace=repo_id)
     
     return len(all_chunks)
     

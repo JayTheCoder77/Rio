@@ -5,13 +5,21 @@ import path from "node:path";
 import type { PrReviewJob } from '@rio/shared-types';
 import { Octokit } from 'octokit';
 import { createAppAuth } from "@octokit/auth-app";
-import { db, repos, reviews, findings, installations, getInstallationOwnerId } from "@rio/db";
 import { eq, and } from "drizzle-orm";
 import YAML from 'yaml';
 import { cloneRepo } from './clone';
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") }); // root: REDIS_URL
 dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY, INTERNAL_SERVICE_TOKEN
+
+if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is not set in the .env file');
+}
+
+// Static ESM imports run before this module body, so @rio/db would construct
+// its client with DATABASE_URL unset. Load the environment first, then import
+// the shared database module so it sees DATABASE_URL at creation.
+const { db, repos, reviews, findings, installations, getInstallationOwnerId } = await import("@rio/db");
 
 if (!process.env.INTERNAL_SERVICE_TOKEN) {
     throw new Error(

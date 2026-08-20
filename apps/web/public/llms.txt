@@ -1,0 +1,26 @@
+# Rio
+
+> Rio is an automated code review tool. It reads the diff of a pull request or a local change, inspects it against the repository's configuration, and reports concrete findings — security issues, error-prone patterns, and likely bugs — on the exact lines that cause them. Rio has two surfaces: a GitHub App that reviews every pull request automatically (inline comments, a summary, and an optional pass/fail check), and a command-line tool (`rio-cli`) for reviewing staged, uncommitted, or committed changes locally with no GitHub connection required.
+
+Rio is bring-your-own-key: reviews run on the LLM provider you connect in the dashboard (Groq or OpenRouter), and no code ever leaves through a third-party shared pipeline. It is open architecture — the GitHub App, worker, and AI engine are separate services that communicate over HTTP.
+
+## Key pages
+
+- [Home](https://rio.dev/): Landing page describing Rio's two ways to review — the GitHub App and the CLI.
+- [Get started](https://rio.dev/install): Choose how to use Rio. Install the GitHub App on a repository, or install the CLI with `pip install rio-cli` or `uv tool install rio-cli`.
+- [Docs](https://rio.dev/docs): Full documentation — installation, GitHub App setup, CLI commands and `rio auth`, `.rio.yml` configuration, best practices, and troubleshooting.
+- [Sign in](https://rio.dev/login): Create an account or sign in to generate API keys, connect an LLM provider, and manage your installations.
+
+## Features
+
+- **GitHub App reviews**: automatic inline comments, PR summary, and an optional GitHub Check Run on every pull request.
+- **CLI reviews**: `rio review` with `--staged`, `--uncommitted`, `--committed`, `--diff <file>`, and `--include-untracked` scopes.
+- **Bring-your-own-key LLM**: connect a Groq or OpenRouter API key in the dashboard; reviews use that provider.
+- **`.rio.yml` configuration**: per-repo tuning with `ignore_paths`, `min_severity`, `max_comments_per_pr`, and `require_check`.
+
+## Install
+
+- pip: `pip install rio-cli`
+- uv: `uv tool install rio-cli`
+- Authenticate: `rio auth` (pastes an API key from the dashboard, validated against Rio, stored at `~/.config/rio/config.toml`)
+- Review: `rio review --staged`

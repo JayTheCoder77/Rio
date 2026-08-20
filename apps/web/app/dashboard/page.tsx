@@ -2,13 +2,22 @@ import { auth } from "@/auth";
 import { createInstallState } from "@/lib/install-state";
 import { reconcileUserInstallations } from "@/lib/github-reconciliation";
 import { redirect } from "next/navigation";
-import { GitFork, ShieldAlert, AlertTriangle, Info, GitPullRequest } from "lucide-react";
+import { CheckCircle2, GitFork, ShieldAlert, AlertTriangle, Info, GitPullRequest } from "lucide-react";
 import { getUserRepos, getReviewStats, getRecentReviews } from "@rio/db";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { InstallButton } from "@/components/dashboard/install-button";
 
 const RECENT_REVIEWS_LIMIT = 5;
+
+const INSTALL_ERROR_MESSAGES: Record<string, string> = {
+  missing_params:
+    "Couldn't complete the GitHub install — the response was missing details. Please try again.",
+  invalid_state:
+    "That install link was invalid or had expired. Please try installing again.",
+  not_found:
+    "We couldn't find that GitHub installation. It may still be syncing — try again in a few seconds.",
+};
 
 const STATUS_STYLES: Record<string, string> = {
   completed: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
@@ -28,7 +37,12 @@ async function startInstall() {
   redirect(`https://github.com/apps/${slug}/installations/new?state=${state}`);
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ install_error?: string; installed?: string }>;
+}) {
+  const { install_error, installed } = await searchParams;
   const session = await auth();
   const userId = session?.user?.id;
 
@@ -57,6 +71,22 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {installed === "1" && (
+        <div className="flex items-center gap-2 rounded-[10px] border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
+          <CheckCircle2 className="size-4 shrink-0" />
+          GitHub App connected — Rio will review pull requests on the repos you
+          selected.
+        </div>
+      )}
+
+      {install_error && (
+        <div className="flex items-center gap-2 rounded-[10px] border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="size-4 shrink-0" />
+          {INSTALL_ERROR_MESSAGES[install_error] ??
+            "Something went wrong connecting GitHub. Please try again."}
+        </div>
+      )}
+
       {repos.length === 0 ? (
         <Card>
           <CardHeader>
@@ -67,12 +97,16 @@ export default async function DashboardPage() {
               reviews.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-3">
             <form action={startInstall}>
-              <Button size="lg" type="submit">
+              <InstallButton size="lg" pendingLabel="Opening GitHub...">
                 Install Rio on GitHub
-              </Button>
+              </InstallButton>
             </form>
+            <p className="text-xs text-muted-foreground">
+              You&apos;ll be taken to GitHub to choose which repos Rio can
+              access. Reviews start automatically when you open a pull request.
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -176,11 +210,21 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             ))}
-            <form action={startInstall}>
-              <Button variant="outline" size="sm" type="submit">
-                Install on another repo
-              </Button>
-            </form>
+            <Card className="mt-1">
+              <CardContent className="flex flex-col items-start justify-between gap-4 py-5 sm:flex-row sm:items-center">
+                <div>
+                  <p className="text-sm font-medium">Connect another repo</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    You&apos;ll choose the repos or organizations on GitHub.
+                  </p>
+                </div>
+                <form action={startInstall}>
+                  <InstallButton pendingLabel="Opening GitHub...">
+                    Install on GitHub
+                  </InstallButton>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         </>
       )}

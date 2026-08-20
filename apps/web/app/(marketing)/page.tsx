@@ -41,9 +41,8 @@ export default function LandingPage() {
 function HeroSection() {
   return (
     <section className="px-6 pb-24 pt-8 sm:px-10 sm:pb-32">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2 lg:gap-8">
-        {/* Left: pill link, thin huge headline, subtext, Log in CTA */}
-        <div className="flex flex-col items-start text-left">
+      <div className="mx-auto max-w-6xl">
+        <div className="flex flex-col items-center text-center">
           <Link
             href="/docs"
             className="group fade-in-up inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm text-foreground/80 transition-colors hover:border-foreground/30 hover:text-foreground"
@@ -77,8 +76,15 @@ function HeroSection() {
           </div>
         </div>
 
-        {/* Right: product demo video placeholder */}
-        <VideoPlaceholder label="Hero video placeholder" />
+        {/* Product screenshot */}
+        <div className="fade-in-up mt-16" style={{ animationDelay: "320ms" }}>
+          <VideoPlaceholder
+            label="Rio dashboard"
+            imageSrc="/rio-dashboard-light.png"
+            imageSrcDark="/rio-dashboard-dark.png"
+            priority
+          />
+        </div>
       </div>
     </section>
   );
@@ -91,12 +97,14 @@ function WaysToReviewSection() {
       sub: "Use the app",
       label: "GitHub App demo placeholder",
       href: "/install",
+      videoSrc: "/rio-github.mp4"
     },
     {
       title: "Want local?",
       sub: "Use the CLI",
       label: "CLI demo placeholder",
       href: "/install",
+      videoSrc: "/rio-cli.mp4?v=2",
     },
   ];
 
@@ -107,12 +115,12 @@ function WaysToReviewSection() {
           Ways to review.
         </h2>
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-2">
+        <div className="mt-14 flex flex-col gap-8">
           {options.map((o) => (
             <Link
               key={o.title}
               href={o.href}
-              className="group flex flex-col gap-4 rounded-[24px] border border-border bg-card p-6 transition-colors hover:border-foreground/15"
+              className="group flex flex-col gap-4 rounded-[24px] border border-border bg-card p-6 transition-colors hover:border-foreground/15 sm:p-8"
             >
               <div>
                 <h3 className="text-xl font-medium tracking-tight text-foreground">
@@ -120,7 +128,7 @@ function WaysToReviewSection() {
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">{o.sub}</p>
               </div>
-              <VideoPlaceholder label={o.label} />
+              <VideoPlaceholder label={o.label} videoSrc={o.videoSrc} />
             </Link>
           ))}
         </div>

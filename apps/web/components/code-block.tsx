@@ -28,7 +28,7 @@ function CodeBlock({
         className
       )}
     >
-      <code className="overflow-x-auto font-mono text-sm text-foreground">
+      <code className="overflow-x-auto whitespace-pre font-mono text-sm leading-relaxed text-foreground">
         {code}
       </code>
       <Button

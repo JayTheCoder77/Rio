@@ -40,6 +40,6 @@ export async function GET(req: NextRequest) {
         .values({userId , installationId : inst.id})
         .onConflictDoNothing();
     
-    return NextResponse.redirect(new URL ("/dashboard" , req.url));
+    return NextResponse.redirect(new URL ("/dashboard?installed=1" , req.url));
 }
  

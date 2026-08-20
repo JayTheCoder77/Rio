@@ -4,8 +4,8 @@ const FOOTER_COLUMNS = [
   {
     title: "Social",
     links: [
-      { href: "https://x.com", label: "X / Twitter", external: true },
-      { href: "https://github.com", label: "GitHub", external: true },
+      { href: "https://x.com/JV2077", label: "X / Twitter", external: true },
+      { href: "https://github.com/JayTheCoder77/Rio", label: "GitHub", external: true },
     ],
   },
 ];
@@ -69,12 +69,12 @@ export function MarketingFooter() {
           className="pointer-events-none absolute -bottom-[0.22em] left-1/2 -translate-x-1/2 select-none text-[13rem] font-bold leading-none tracking-tight text-foreground sm:text-[19rem]"
           style={{
             backgroundImage:
-              "radial-gradient(circle, rgba(0,0,0,0.35) 1px, transparent 1.4px)",
+              "radial-gradient(circle, color-mix(in oklab, var(--foreground) 35%, transparent) 1px, transparent 1.4px)",
             backgroundSize: "6px 6px",
             WebkitBackgroundClip: "text",
             backgroundClip: "text",
             color: "transparent",
-            WebkitTextStroke: "1px rgba(0,0,0,0.08)",
+            WebkitTextStroke: "1px color-mix(in oklab, var(--foreground) 10%, transparent)",
           }}
         >
           Rio

@@ -30,7 +30,7 @@ vi.mock("@octokit/auth-app", () => ({
   createAppAuth: () => async () => ({ token: "inst-token" }),
 }));
 
-vi.mock("/Users/jayant/projects/Rio/apps/worker/src/clone", () => ({
+vi.mock(new URL("../src/clone", import.meta.url).pathname, () => ({
   cloneRepo: mocks.cloneRepo,
 }));
 

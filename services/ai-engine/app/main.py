@@ -12,7 +12,7 @@ from app.auth import (
 from app.graph import review_graph
 from app.indexing import index_repo
 from app.mcp_server import mcp
-from app.nodes import ProviderCredentialError
+from app.nodes import DiffTooLargeError, ProviderCredentialError
 from app.state import IndexRepoRequest, ReviewState
 
 
@@ -69,11 +69,13 @@ def review_endpoint(
 
     try:
         result = review_graph.invoke(state)
-    except ProviderCredentialError as exc:
-        # The credential exists but the provider rejected it (bad model
-        # name, revoked key, rate limit, etc.) — distinct from 412 (no
-        # credential configured at all). 422: request was well-formed and
-        # authenticated, but couldn't be processed as specified.
+    except (ProviderCredentialError, DiffTooLargeError) as exc:
+        # ProviderCredentialError: the credential exists but the provider
+        # rejected it (bad model name, revoked key, rate limit, etc.).
+        # DiffTooLargeError: the diff exceeds MAX_DIFF_CHARS. Both are
+        # distinct from 412 (no credential configured at all) — 422: request
+        # was well-formed and authenticated, but couldn't be processed as
+        # specified.
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # check what shape `result` actually comes back as once you run this —
     # langgraph may hand back a plain dict of the final state rather than a

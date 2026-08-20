@@ -16,12 +16,12 @@ const CLI_INSTALL_COMMANDS = [
   {
     value: "uv",
     label: "uv",
-    command: "uv tool install git+https://github.com/rio-dev/rio.git#subdirectory=apps/cli",
+    command: "uv tool install rio-cli",
   },
   {
-    value: "pipx",
-    label: "pipx",
-    command: "pipx install git+https://github.com/rio-dev/rio.git#subdirectory=apps/cli",
+    value: "pip",
+    label: "pip",
+    command: "pip install rio-cli",
   },
 ];
 
@@ -88,9 +88,10 @@ export default function InstallPage() {
               ))}
             </Tabs>
             <p className="text-xs text-muted-foreground">
-              Then run <code className="font-mono">rio review --staged</code>{" "}
-              from inside a git repo. Requires an API key (create one after
-              signing in).
+              Then run <code className="font-mono">rio auth</code>, paste
+              your API key, and review staged changes from inside a git repo:
+              <br />
+              <code className="font-mono">rio review --staged</code>
             </p>
           </CardContent>
         </Card>

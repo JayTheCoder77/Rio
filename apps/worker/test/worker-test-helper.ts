@@ -102,7 +102,7 @@ vi.mock("@rio/db", () => {
   };
 });
 
-vi.mock("/Users/jayant/projects/Rio/apps/worker/src/clone", () => ({
+vi.mock(new URL("../src/clone", import.meta.url).pathname, () => ({
   cloneRepo: mocks.cloneRepo,
 }));
 
