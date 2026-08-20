@@ -42,12 +42,20 @@ describe("cloneRepo", () => {
   it("runs the git command sequence in order and returns a cleanup that removes the dir", async () => {
     const { path: dir, cleanup } = await cloneRepo("org-a", "repo-b", "abc123", "tok");
 
-    expect(state.calls.map((c) => [c.cmd, ...c.args].join(" "))).toEqual([
+    const commandStrings = state.calls.map((c) => [c.cmd, ...c.args].join(" "));
+    // The first four commands are the git clone sequence.
+    expect(commandStrings.slice(0, 4)).toEqual([
       "git init",
       "git remote add origin https://x-access-token:tok@github.com/org-a/repo-b.git",
       "git fetch --depth=1 origin abc123",
       "git checkout abc123",
     ]);
+    // Then the tree is made world-readable for the sandbox container, since
+    // mkdtemp's 0700 root blocks the container's `sandbox` user once mounted.
+    expect(state.calls[4].cmd).toBe("chmod");
+    expect(state.calls[4].args[0]).toBe("-R");
+    expect(state.calls[4].args[1]).toBe("a+rX");
+    expect(state.calls[4].args[2]).toMatch(/rio-clone-/);
 
     expect((await fs.stat(dir)).isDirectory()).toBe(true);
     await cleanup();

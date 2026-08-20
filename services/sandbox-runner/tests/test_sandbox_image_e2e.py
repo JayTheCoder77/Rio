@@ -23,6 +23,9 @@ REPO_FILES = {
 
 def test_sandbox_image_end_to_end(tmp_path):
     # Build a fixture repo on the host; the container mounts it at /workspace.
+    # mkdtemp makes tmp_path 0700, which blocks the container's unprivileged
+    # `sandbox` user from traversing the mount root (same as clone.ts in prod).
+    tmp_path.chmod(0o755)
     for name, content in REPO_FILES.items():
         p = tmp_path / name
         p.write_text(content)
