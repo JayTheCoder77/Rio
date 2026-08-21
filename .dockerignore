@@ -1,0 +1,33 @@
+# Dependencies — reinstalled fresh inside the image
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+
+# VCS / editor
+.git
+.vscode
+.DS_Store
+
+# Build outputs — rebuilt inside the image
+**/.next
+**/out
+**/build
+**/dist
+**/.turbo
+tsconfig.tsbuildinfo
+
+# Secrets — never bake these into an image layer
+.env
+.env.*
+*.pem
+
+# Not needed at runtime
+**/coverage
+**/*.md
+screenshots
+todo.md
+CLAUDE.md
+.github
