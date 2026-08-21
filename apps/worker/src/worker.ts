@@ -123,6 +123,14 @@ async function fetchLintResults(
     }
 }
 
+function isSandboxEnabled(): boolean {
+    // Preserve the local-development behavior unless deployment configuration
+    // explicitly opts out. The hosted MVP sets this to `false` until the
+    // sandbox has a remote-safe input contract (it cannot receive a local
+    // worker path across services).
+    return process.env.SANDBOX_ENABLED?.toLowerCase() !== "false";
+}
+
 const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>) => {
     const { repo, prNumber, headSha, baseSha, installationId, githubRepoId } = job.data;
 
@@ -176,18 +184,20 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
 
         const rioConfig = await fetchRioConfig(octokit, owner, repoName, headSha);
 
-        const { token } = await auth({ type: "installation", installationId });
         let lintResults: unknown[] = [];
-        try {
-            const { path: repoPath, cleanup } = await cloneRepo(owner, repoName, headSha, token);
+        if (isSandboxEnabled()) {
+            const { token } = await auth({ type: "installation", installationId });
             try {
-                const changedFiles = await getChangedFiles(octokit, owner, repoName, prNumber);
-                lintResults = await fetchLintResults(repoPath, changedFiles);
-            } finally {
-                await cleanup();
+                const { path: repoPath, cleanup } = await cloneRepo(owner, repoName, headSha, token);
+                try {
+                    const changedFiles = await getChangedFiles(octokit, owner, repoName, prNumber);
+                    lintResults = await fetchLintResults(repoPath, changedFiles);
+                } finally {
+                    await cleanup();
+                }
+            } catch {
+                // clone failed — proceed without sandbox corroboration
             }
-        } catch {
-            // clone failed — proceed without sandbox corroboration
         }
 
         if (!onBehalfOfUserId) {

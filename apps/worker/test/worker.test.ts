@@ -145,4 +145,31 @@ describe("worker processor", () => {
     expect(testMocks.api.createComment).not.toHaveBeenCalled();
     expect(testMocks.cloneRepo).toHaveBeenCalledTimes(1);
   });
+
+  it("skips cloning and linting when sandbox execution is disabled", async () => {
+    process.env.SANDBOX_ENABLED = "false";
+    testMocks.selectResults.push([]); // dedupe
+    testMocks.selectResults.push([]); // existing repo row
+    testMocks.selectResults.push([{ id: "inst-1" }]); // installation
+    testMocks.insertReturning.push([{ id: "repo-1" }]); // upsert repo
+    testMocks.insertReturning.push([{ id: "rev-1" }]); // insert review
+    testMocks.getInstallationOwnerId.mockResolvedValue("user-1");
+    testMocks.api.get.mockResolvedValue({ data: DIFF });
+    testMocks.api.getContent.mockRejectedValue(new Error("no config"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ findings: [] }),
+      }),
+    );
+
+    await runHandler();
+
+    expect(testMocks.cloneRepo).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/v1/review"), expect.anything());
+    delete process.env.SANDBOX_ENABLED;
+  });
 });
