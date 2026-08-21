@@ -26,7 +26,6 @@ tsconfig.tsbuildinfo
 
 # Not needed at runtime
 **/coverage
-**/*.md
 screenshots
 todo.md
 CLAUDE.md
