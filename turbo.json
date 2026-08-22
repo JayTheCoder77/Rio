@@ -3,17 +3,15 @@
   "ui": "tui",
   "tasks": {
     "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        ".env*"
-      ],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "!.next/dev/**"
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      "env": [
+        "DATABASE_URL",
+        "ENCRYPTION_KEY",
+        "AUTH_GITHUB_ID",
+        "AUTH_GITHUB_SECRET",
+        "AUTH_SECRET"
       ]
     },
     "lint": {
