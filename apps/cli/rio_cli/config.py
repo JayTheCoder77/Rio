@@ -1,10 +1,14 @@
+import os
 from pathlib import Path
 
 import tomllib
 
 from rio_cli.utils import _fail
 
-DEFAULT_AI_ENGINE_URL = "http://localhost:8000"
+DEFAULT_AI_ENGINE_URL = os.environ.get(
+    "RIO_API_URL", "https://rio-ai-engine.onrender.com"
+)
+# DEFAULT_AI_ENGINE_URL = "http://localhost:8000"
 CONFIG_PATH = Path.home() / ".config" / "rio" / "config.toml"
 
 def get_ai_engine_url() -> str:
