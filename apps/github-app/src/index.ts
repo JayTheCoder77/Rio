@@ -5,6 +5,7 @@ import type { IndexRepoJob, PrReviewJob } from "@rio/shared-types";
 import IORedis from "ioredis";
 import path from "node:path";
 import dotenv from "dotenv";
+import { wakeWorker } from "./wake-worker";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
@@ -70,6 +71,7 @@ export default (app: Probot) => {
         sha: branch.commit.sha,
         installationId: id,
       }, { jobId: `index-${repo.full_name}-${branch.commit.sha}` });
+      wakeWorker('index');
     }
   });
 
@@ -121,6 +123,7 @@ export default (app: Probot) => {
     },
       { jobId: `${repo}-${prNumber}-${headSha}` },
     );
+    wakeWorker('review');
   });
 
   app.on("push", async (context) => {
@@ -149,7 +152,8 @@ export default (app: Probot) => {
     }, {
       jobId:
         `index-${context.payload.repository.full_name}-${context.payload.after}`
-    });
+      });
+      wakeWorker('index');
   });
 }
 

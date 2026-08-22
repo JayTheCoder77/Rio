@@ -11,7 +11,9 @@
         "ENCRYPTION_KEY",
         "AUTH_GITHUB_ID",
         "AUTH_GITHUB_SECRET",
-        "AUTH_SECRET"
+        "AUTH_SECRET",
+        "NEXT_PUBLIC_AI_ENGINE_URL",
+        "NEXT_PUBLIC_SANDBOX_RUNNER_URL"
       ]
     },
     "lint": {

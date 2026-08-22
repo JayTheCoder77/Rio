@@ -1,11 +1,17 @@
 "use client";
 
+import { useEffect } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
+import { warmServices, warmServicesOnce } from "@/lib/warm-services";
 
 export function SignInButton() {
   const { pending } = useFormStatus();
+
+  useEffect(() => {
+    warmServicesOnce(); // as soon as the login page mounts — most lead time
+  }, []);
 
   return (
     <Button
@@ -13,6 +19,7 @@ export function SignInButton() {
       size="lg"
       className="w-full bg-foreground text-background hover:bg-foreground/90"
       disabled={pending}
+      onClick={() => warmServices()} // extra nudge at click; doesn't block the form submit
     >
       <GithubMark />
       {pending ? "Signing in..." : "Sign in with GitHub"}
