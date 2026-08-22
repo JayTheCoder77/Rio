@@ -43,7 +43,7 @@ def get_index():
 BATCH_SIZE=100
 
 def index_repo(files : list[tuple[str,str]] , repo_id : str) -> int:
-    """Chunks every (path, content) pair, embeds via Ollama, upserts to
+    """Chunks every (path, content) pair, embeds via Nomic, upserts to
     Pinecone under namespace=repo_id. Returns count of chunks upserted.
 
     Takes files directly rather than a disk path — the caller (the worker)

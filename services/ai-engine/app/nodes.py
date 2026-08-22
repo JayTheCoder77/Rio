@@ -2,7 +2,6 @@ import fnmatch
 import logging
 import os
 
-from langchain_ollama import OllamaEmbeddings
 from langchain_openai import ChatOpenAI
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 # var (set lower in prod if you want stricter caps) rather than editing code.
 MAX_DIFF_CHARS = int(os.getenv("MAX_DIFF_CHARS", "40000"))
 MAX_CONTEXT_CHARS = 5000
-embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
 PROVIDER_BASE_URLS = {
     "groq": "https://api.groq.com/openai/v1",
@@ -229,7 +227,7 @@ def enrich(state : ReviewState) -> dict:
         # than failing the whole review.
         logger.warning("context retrieval skipped: %s", exc)
         return {"context": []}
-        
+
     all_candidates.sort(key=lambda c: c.score, reverse=True)
   
     context: list[RetrievedChunk] = []
@@ -256,5 +254,3 @@ def verify(state : ReviewState) -> dict:
     ]
 
     return {"findings": corroborated}
-
-        

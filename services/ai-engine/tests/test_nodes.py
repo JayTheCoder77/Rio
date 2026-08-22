@@ -84,10 +84,11 @@ class TestIngest:
         out = ingest(state)
         assert [pf.path for pf in out["parsed_files"]] == ["tests/a.py"]
 
-    def test_raises_on_oversized_diff(self):
+    def test_raises_on_oversized_diff(self, monkeypatch):
         from app.nodes import DiffTooLargeError
 
-        big = "a" * (40_000 + 1)
+        monkeypatch.setattr("app.nodes.MAX_DIFF_CHARS", 40_000)
+        big = "a" * 40_001
         with pytest.raises(DiffTooLargeError, match="diff too large"):
             ingest(ReviewState(diff=big))
 

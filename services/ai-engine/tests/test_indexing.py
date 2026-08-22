@@ -29,16 +29,12 @@ def stub_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_index_repo_upserts_chunks(tmp_path, monkeypatch, fake_index, stub_embeddings):
+def test_index_repo_upserts_chunks(monkeypatch, fake_index, stub_embeddings):
     from app import indexing
 
     monkeypatch.setattr(indexing, "index", fake_index)
 
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / "hello.py").write_text("def hello():\n    return 'world'\n")
-
-    count = indexing.index_repo(str(repo), "repo-1")
+    count = indexing.index_repo([("hello.py", "def hello():\n    return 'world'\n")], "repo-1")
 
     assert count == 1
     (vectors, namespace) = fake_index.calls[0]
@@ -49,18 +45,15 @@ def test_index_repo_upserts_chunks(tmp_path, monkeypatch, fake_index, stub_embed
     assert vectors[0]["id"].startswith("hello.py:")
 
 
-def test_index_repo_batches_oversized_repos(tmp_path, monkeypatch, fake_index, stub_embeddings):
+def test_index_repo_batches_oversized_repos(monkeypatch, fake_index, stub_embeddings):
     from app import indexing
 
     monkeypatch.setattr(indexing, "index", fake_index)
 
-    repo = tmp_path / "repo"
-    repo.mkdir()
     # ~172KB of source -> well over the BATCH_SIZE=100 chunk boundary, but
-    # under walk_repo's 500KB max_file_bytes so the file is actually read.
-    (repo / "big.py").write_text("\n".join(f"line{i:05d}: " + "a" * 30 for i in range(4000)))
-
-    count = indexing.index_repo(str(repo), "repo-2")
+    # below the worker's 500KB max_file_bytes so it is actually shipped.
+    content = "\n".join(f"line{i:05d}: " + "a" * 30 for i in range(4000))
+    count = indexing.index_repo([("big.py", content)], "repo-2")
 
     assert count > 100
     assert len(fake_index.calls) > 1
@@ -72,25 +65,20 @@ def test_index_repo_batches_oversized_repos(tmp_path, monkeypatch, fake_index, s
     assert total == count
 
 
-def test_index_repo_skips_env_files(tmp_path, monkeypatch, fake_index, stub_embeddings):
+def test_index_repo_accepts_files_pre_filtered_by_worker(monkeypatch, fake_index, stub_embeddings):
     from app import indexing
 
     monkeypatch.setattr(indexing, "index", fake_index)
 
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / "app.py").write_text("print('hi')\n")
-    (repo / ".env").write_text("SECRET=value\n")
-    (repo / ".env.local").write_text("SECRET=value\n")
-
-    count = indexing.index_repo(str(repo), "repo-3")
+    # `walkRepo` in the worker filters .env files before sending this request.
+    count = indexing.index_repo([("app.py", "print('hi')\n")], "repo-3")
 
     assert count == 1
     assert fake_index.calls[0][1] == "repo-3"
     assert fake_index.calls[0][0][0]["metadata"]["file_path"] == "app.py"
 
 
-def test_index_endpoint(tmp_path, monkeypatch, fake_index, stub_embeddings):
+def test_index_endpoint(monkeypatch, fake_index, stub_embeddings):
     # Called as a plain function rather than through TestClient: the mcp
     # lifespan (mcp.session_manager.run) only tolerates one run per process,
     # and test_endpoints.py already owns that single run via its module-scoped
@@ -102,10 +90,11 @@ def test_index_endpoint(tmp_path, monkeypatch, fake_index, stub_embeddings):
 
     monkeypatch.setattr(indexing, "index", fake_index)
 
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / "hello.py").write_text("def hello():\n    return 'world'\n")
-
-    result = index_endpoint(IndexRepoRequest(repo_path=str(repo), repo_id="repo-4"))
+    result = index_endpoint(
+        IndexRepoRequest(
+            files=[{"path": "hello.py", "content": "def hello():\n    return 'world'\n"}],
+            repo_id="repo-4",
+        )
+    )
 
     assert result == {"status": "ok", "chunks_indexed": 1}

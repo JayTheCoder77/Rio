@@ -193,7 +193,10 @@ class TestIndex:
     def test_index_endpoint_mocked(self, client, monkeypatch):
         from app import main as m
 
-        monkeypatch.setattr(m, "index_repo", lambda repo_path, repo_id: 42)
-        resp = client.post("/v1/index/repo", json={"repo_path": "/tmp/x", "repo_id": "repo-1"})
+        monkeypatch.setattr(m, "index_repo", lambda files, repo_id: 42)
+        resp = client.post(
+            "/v1/index/repo",
+            json={"files": [{"path": "f.py", "content": "x = 1\\n"}], "repo_id": "repo-1"},
+        )
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok", "chunks_indexed": 42}

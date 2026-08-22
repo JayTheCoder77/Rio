@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
   return {
     capturedHandler: null as ((job: unknown) => Promise<unknown>) | null,
     cloneRepo: vi.fn(),
+    walkRepo: vi.fn(),
     cleanup: vi.fn(),
   };
 });
@@ -32,6 +33,10 @@ vi.mock("@octokit/auth-app", () => ({
 
 vi.mock(new URL("../src/clone", import.meta.url).pathname, () => ({
   cloneRepo: mocks.cloneRepo,
+}));
+
+vi.mock(new URL("../src/walkRepo", import.meta.url).pathname, () => ({
+  walkRepo: mocks.walkRepo,
 }));
 
 export const testMocks = mocks;

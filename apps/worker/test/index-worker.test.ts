@@ -13,6 +13,9 @@ beforeEach(() => {
     path: "/tmp/rio-clone/xyz",
     cleanup: testMocks.cleanup,
   });
+  testMocks.walkRepo.mockResolvedValue([
+    { path: "src/index.ts", content: "export const value = 1;\n" },
+  ]);
   testMocks.cleanup.mockResolvedValue(undefined);
 });
 
@@ -28,8 +31,9 @@ describe("index-repo worker", () => {
     expect(testMocks.cloneRepo).toHaveBeenCalledWith("org-a", "repo-b", "sha-abc", "inst-token");
     expect(fetch).toHaveBeenCalledWith(AI_ENGINE_URL, expect.objectContaining({ method: "POST" }));
     const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(testMocks.walkRepo).toHaveBeenCalledWith("/tmp/rio-clone/xyz");
     expect(JSON.parse(String(init?.body))).toEqual({
-      repo_path: "/tmp/rio-clone/xyz",
+      files: [{ path: "src/index.ts", content: "export const value = 1;\n" }],
       repo_id: "repo-42",
     });
     expect(testMocks.cleanup).toHaveBeenCalled();
