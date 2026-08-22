@@ -87,6 +87,6 @@ def review_endpoint(
 
 @app.post("/v1/index/repo")
 def index_endpoint(repo: IndexRepoRequest) -> dict:
-    count = index_repo(repo.repo_path , repo.repo_id)
+    count = index_repo([(f.path, f.content) for f in repo.files] , repo.repo_id)
     return {"status" : "ok" , "chunks_indexed" : count}
 

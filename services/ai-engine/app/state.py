@@ -35,6 +35,13 @@ class ReviewState(BaseModel):
     # the client — stripped out in `main.py` before the response is sent.
     on_behalf_of_user_id: str | None = None
 
+class IndexFile(BaseModel):
+    path: str
+    content: str
+
 class IndexRepoRequest(BaseModel):
-    repo_path : str
+    # Was `repo_path: str` — a path on the *worker's* disk, which ai-engine
+    # (a separate container) can never see. The worker now walks the clone
+    # itself and ships file contents directly; see `apps/worker/src/indexWorker.ts`.
+    files: list[IndexFile]
     repo_id : str

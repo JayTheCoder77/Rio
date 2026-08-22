@@ -5,6 +5,7 @@ import path from "node:path";
 import type { IndexRepoJob } from "@rio/shared-types";
 import { createAppAuth } from "@octokit/auth-app";
 import { cloneRepo } from "./clone";
+import { walkRepo } from "./walkRepo";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") }); // root: REDIS_URL
 dotenv.config({ path: path.resolve(__dirname, "../.env") });        // local: APP_ID, PRIVATE_KEY
@@ -27,10 +28,14 @@ const indexWorker = new Worker<IndexRepoJob>("index-repo", async (job: Job<Index
     const { path: repoPath, cleanup } = await cloneRepo(owner, repoName, sha, token);
 
     try {
+        // ai-engine is a separate container — it can't see repoPath on this
+        // worker's disk, so the files themselves get shipped instead.
+        const files = await walkRepo(repoPath);
+
         const res = await fetch(`${process.env.AI_ENGINE_URL ?? "http://localhost:8000"}/v1/index/repo`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ repo_path: repoPath, repo_id: repoId }),
+            body: JSON.stringify({ files, repo_id: repoId }),
         });
 
         if (!res.ok) {

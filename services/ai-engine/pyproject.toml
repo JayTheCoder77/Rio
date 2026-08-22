@@ -7,7 +7,7 @@ dependencies = [
     "fastapi[standard]",
     "uvicorn[standard]",
     "langgraph",
-    "langchain-ollama",
+    "langchain-nomic",
     "langchain-openai>=0.4.0",
     "langchain-text-splitters>=1.1.2",
     "pydantic>=2",
