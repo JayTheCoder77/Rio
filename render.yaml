@@ -1,0 +1,147 @@
+# Render Blueprint — recreates all four Rio backend services via
+# `render blueprint deploy` (see Phase 9 of dep-todo.md).
+#
+# Critical setting for every service: `dockerContext: .` (repo root).
+# All four Dockerfiles expect the workspace at the build root to reach
+# packages/rio-core, packages/db, etc. — the same pattern as the CI job's
+# `docker build -f services/sandbox-runner/Dockerfile .`.
+#
+# Secrets (DATABASE_URL, *_KEY, *_TOKEN, PRIVATE_KEY, GitHub OAuth) are
+# marked `sync: false` so Render keeps them in the dashboard and never
+# overwrites them from this file. Fill them in once on first deploy.
+
+services:
+  # ---------------------------------------------------------------------------
+  # 4.1 sandbox-runner — deploy first (no external deps)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: sandbox-runner
+    runtime: docker
+    dockerfilePath: services/sandbox-runner/Dockerfile
+    dockerContext: .
+    branch: main
+    plan: free
+    healthCheckPath: /v1/health
+    envVars: []
+
+  # ---------------------------------------------------------------------------
+  # 4.2 ai-engine
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: rio-ai-engine
+    runtime: docker
+    dockerfilePath: services/ai-engine/Dockerfile
+    dockerContext: .
+    branch: main
+    plan: free
+    healthCheckPath: /v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: rio
+      - key: INTERNAL_SERVICE_TOKEN
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: MAX_DIFF_CHARS
+        value: "200000"
+      - key: NOMIC_API_KEY
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # 4.3 github-app
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: rio-github-app
+    runtime: docker
+    dockerfilePath: apps/github-app/Dockerfile
+    dockerContext: .
+    branch: main
+    plan: free
+    # Probot health path GET https://rio-github-app.onrender.com/probot
+    envVars:
+      - key: APP_ID
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: PORT
+        value: "3000"
+      - key: LOG_LEVEL
+        value: info
+      # Cross-service URLs (hostnames follow the `name:` fields above).
+      - key: AI_ENGINE_URL
+        value: https://rio-ai-engine.onrender.com
+      - key: REVIEW_WORKER_URL
+        sync: false
+      - key: INDEX_WORKER_URL
+        sync: false
+      - key: SANDBOX_RUNNER_URL
+        value: https://sandbox-runner.onrender.com
+
+  # ---------------------------------------------------------------------------
+  # 4.4 worker — TWO services from the same Dockerfile, split by WORKER_ENTRY
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: rio-worker-review
+    runtime: docker
+    dockerfilePath: apps/worker/Dockerfile
+    dockerContext: .
+    branch: main
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ID
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: INTERNAL_SERVICE_TOKEN
+        sync: false
+      - key: WORKER_ENTRY
+        value: review
+      - key: AI_ENGINE_URL
+        value: https://rio-ai-engine.onrender.com
+      - key: SANDBOX_RUNNER_URL
+        value: https://rio-sandbox-runner.onrender.com
+
+  - type: web
+    name: rio-worker-index
+    runtime: docker
+    dockerfilePath: apps/worker/Dockerfile
+    dockerContext: .
+    branch: main
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ID
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: INTERNAL_SERVICE_TOKEN
+        sync: false
+      - key: WORKER_ENTRY
+        value: index
+      - key: AI_ENGINE_URL
+        value: https://rio-ai-engine.onrender.com
+      - key: SANDBOX_RUNNER_URL
+        value: https://rio-sandbox-runner.onrender.com
