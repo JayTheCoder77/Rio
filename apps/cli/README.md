@@ -21,8 +21,17 @@ dashboard's API keys page):
 rio auth
 ```
 
-This prompts for your API key, validates it against your Rio instance, and saves it to
-`~/.config/rio/config.toml` with restricted (`0600`) file permissions.
+This prompts for your API key, validates it against your Rio instance, and saves it to the
+platform-specific config file shown below. On POSIX the file is written with restricted
+(`0600`) permissions; on Windows it lives under your already-private `%APPDATA%`.
+
+| OS | Config file |
+| --- | --- |
+| Linux | `~/.config/rio/config.toml` |
+| macOS | `~/Library/Application Support/rio/config.toml` |
+| Windows | `%APPDATA%\rio\config.toml` |
+
+The directory is created for you on first run, so you never need to mkdir by hand.
 
 ## Usage
 
@@ -45,9 +54,10 @@ rio review --staged --include-untracked
 
 ## Configuration
 
-`rio auth` manages `~/.config/rio/config.toml` for you. To point the CLI at a
-self-hosted `ai-engine` instance instead of the default (`http://localhost:8000`), edit
-the `[api] url` value in that file, or set it before running `rio auth`:
+`rio auth` manages the platform-specific config file for you (see the table above for the
+exact location per OS). To point the CLI at a self-hosted `ai-engine` instance instead of
+the default (`https://rio-ai-engine.onrender.com`), edit the `[api] url` value in that
+file, or set it before running `rio auth`:
 
 ```toml
 [api]

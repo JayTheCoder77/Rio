@@ -1,17 +1,18 @@
 [project]
 name = "rio-cli"
-version = "0.2.1"
+version = "0.2.2"
 description = "Command-line client for Rio, an automated code review tool."
 readme = "README.md"
 license = "ISC"
 authors = [{ name = "JayTheCoder77" }]
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 dependencies = [
     "rio-review-core>=0.1.0,<0.2.0",
     "httpx>=0.28.1",
     "rich>=15.0.0",
     "typer>=0.27.1",
-    "pyyaml>=6.0"
+    "pyyaml>=6.0",
+    "platformdirs>=4.0",
 ]
 
 [project.scripts]

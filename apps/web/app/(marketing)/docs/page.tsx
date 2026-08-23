@@ -25,6 +25,12 @@ const CLI_INSTALL_COMMANDS = [
   },
 ];
 
+const CLI_CONFIG_PATHS = [
+  { os: "Linux", path: "~/.config/rio/config.toml" },
+  { os: "macOS", path: "~/Library/Application Support/rio/config.toml" },
+  { os: "Windows", path: "%APPDATA%\\rio\\config.toml" },
+];
+
 const RIO_YML_EXAMPLE = `# .rio.yml — place at the root of your repo
 ignore_paths:
   - "vendor/**"
@@ -100,8 +106,7 @@ export default function DocsPage() {
             </li>
             <li>
               <strong className="font-medium text-foreground">CLI</strong> —
-              reviews staged, uncommitted, or committed changes locally, with
-              no GitHub connection required.
+              reviews staged, uncommitted, or committed changes locally.
             </li>
           </ul>
           <p className="text-sm text-muted-foreground">
@@ -175,8 +180,9 @@ export default function DocsPage() {
                 .
               </li>
               <li>
-                Authenticate the CLI — it validates your key and stores it in{" "}
-                <code className="font-mono">~/.config/rio/config.toml</code>:
+                Authenticate the CLI — it validates your key and stores it in
+                your platform&apos;s Rio config file (see its exact
+                location below):
                 <CodeBlock code="rio auth" className="mt-2" />
               </li>
               <li>
@@ -291,10 +297,34 @@ export default function DocsPage() {
             </ol>
             <p className="text-sm text-muted-foreground">
               <code className="font-mono">rio auth</code> checks the key
-              against Rio before saving it, then writes it to{" "}
-              <code className="font-mono">~/.config/rio/config.toml</code>{" "}
-              with owner-only permissions (<code className="font-mono">0600</code>).
+              against Rio before saving it, then writes it to your
+              platform&apos;s Rio config file:
             </p>
+            <div className="mt-3 flex flex-col gap-2 rounded-md border border-border p-3">
+              <p className="text-xs font-medium text-foreground">
+                Config file location
+              </p>
+              <ul className="flex flex-col gap-1.5">
+                {CLI_CONFIG_PATHS.map((row) => (
+                  <li
+                    key={row.os}
+                    className="flex items-baseline gap-2 text-xs text-muted-foreground"
+                  >
+                    <span className="w-16 shrink-0 font-medium text-foreground">
+                      {row.os}
+                    </span>
+                    <code className="font-mono break-all">{row.path}</code>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                The directory is created automatically on first run. On POSIX
+                the file is written with{" "}
+                <code className="font-mono">0600</code> permissions; on
+                Windows it lives under your already-private{" "}
+                <code className="font-mono">%APPDATA%</code>.
+              </p>
+            </div>
             <p className="text-sm text-muted-foreground">
               Alternatively, write that file yourself:
             </p>
@@ -491,8 +521,8 @@ export default function DocsPage() {
               <li>
                 <code className="font-mono">could not connect to
                 ai-engine at ...</code> — the CLI can&apos;t reach the API.
-                Check the <code className="font-mono">url</code> in{" "}
-                <code className="font-mono">~/.config/rio/config.toml</code>,
+                Check                 the <code className="font-mono">url</code> in your Rio config
+                file (location varies by OS — see the CLI section above),
                 or re-run <code className="font-mono">rio auth</code>.
               </li>
               <li>
@@ -517,6 +547,25 @@ export default function DocsPage() {
           <CardTitle className="mt-2">Changelog</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-medium">rio-cli 0.2.2</p>
+            <ul className="mt-1 flex list-disc flex-col gap-1.5 pl-5 text-sm text-muted-foreground">
+              <li>
+                Cross-platform config: the file now resolves per OS —
+                <code className="font-mono">~/.config/rio/config.toml</code>{" "}
+                on Linux,{" "}
+                <code className="font-mono">
+                  ~/Library/Application Support/rio/config.toml
+                </code>{" "}
+                on macOS, and{" "}
+                <code className="font-mono">%APPDATA%\rio\config.toml</code>{" "}
+                on Windows — instead of a hardcoded Linux path.
+              </li>
+              <li>
+                Requires Python 3.12+ (removed the upper version cap).
+              </li>
+            </ul>
+          </div>
           <div>
             <p className="text-sm font-medium">rio-cli 0.2.0</p>
             <ul className="mt-1 flex list-disc flex-col gap-1.5 pl-5 text-sm text-muted-foreground">
