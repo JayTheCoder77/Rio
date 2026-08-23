@@ -18,14 +18,28 @@ const AUX_URLS: (string | undefined)[] = [
   process.env.SANDBOX_RUNNER_URL && `${process.env.SANDBOX_RUNNER_URL.replace(/\/$/, "")}/v1/health`,
 ];
 
-function ping(url: string) {
-  void fetch(url, { signal: AbortSignal.timeout(5000) }).catch(() => undefined);
+// A fully-cold Render free-tier container can take well past a few seconds
+// to spin up — this ping is fire-and-forget and doesn't block enqueueing,
+// so there's no cost to giving it real room. A single short-timeout attempt
+// (previously 5s) can get aborted mid-cold-start before the container ever
+// finishes booting, which looks identical to "the ping never happened" —
+// exactly what caused jobs to sit in `waiting` with no automatic recovery.
+async function ping(url: string, attempts = 3, timeoutMs = 45000) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      if (res.ok) return;
+    } catch {
+      // fall through to retry
+    }
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 5000));
+  }
 }
 
 export function wakeWorker(kind: "review" | "index") {
   const url = WORKER_URLS[kind];
-  if (url) ping(`${url.replace(/\/$/, "")}/healthz`);
+  if (url) void ping(`${url.replace(/\/$/, "")}/healthz`);
   for (const auxUrl of AUX_URLS) {
-    if (auxUrl) ping(auxUrl);
+    if (auxUrl) void ping(auxUrl);
   }
 }

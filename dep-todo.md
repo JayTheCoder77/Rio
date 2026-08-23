@@ -424,26 +424,26 @@ as a test user) — and it's free if you use Groq's free tier.
 
 ## Phase 9 — Wire up CD
 
-- [ ] On GitHub, add branch protection on `main` requiring the existing
+- [x] On GitHub, add branch protection on `main` requiring the existing
   ```
   `.github/workflows/ci.yml` checks (`js` and `python` jobs) to pass
   before merge.
   ```
-- [ ] On each Render service, confirm **Auto-Deploy** is on for `main` (it's
+- [x] On each Render service, confirm **Auto-Deploy** is on for `main` (it's
   ```
   on by default when you connect the repo, but double-check).
   ```
-- [ ] Optional but recommended: commit a `render.yaml` Blueprint at the repo
+- [x] Optional but recommended: commit a `render.yaml` Blueprint at the repo
   ```
   root capturing all four services' config from Phase 4, so the whole
   backend can be recreated with `render blueprint deploy` instead of
   manually re-clicking through the dashboard if you ever need to.
   ```
-- [ ] Vercel's GitHub integration auto-deploys on push to `main` by default —
+- [x] Vercel's GitHub integration auto-deploys on push to `main` by default —
   ```
   confirm this is enabled in the Vercel project settings.
   ```
-- [ ] Push a trivial change to `main` and confirm all five deployments
+- [x] Push a trivial change to `main` and confirm all five deployments
   ```
   (4 Render + Vercel) trigger and go green.
   ```
