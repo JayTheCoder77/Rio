@@ -2,6 +2,7 @@ import { Worker, Job } from 'bullmq';
 import dotenv from "dotenv";
 import IORedis from "ioredis";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import type { PrReviewJob } from '@rio/shared-types';
 import { Octokit } from 'octokit';
 import { createAppAuth } from "@octokit/auth-app";
@@ -101,6 +102,20 @@ async function fetchLintResults(
     changedFiles: string[],
 ): Promise<unknown[]> {
     try {
+        // sandbox-runner is a separate container — it can't read repoPath
+        // off this worker's disk, so file contents get shipped instead.
+        // Python-only: JS/TS (eslint) was dropped, see sandbox-runner's
+        // /v1/verify comment for why.
+        const files = await Promise.all(
+            changedFiles.map(async (relPath) => {
+                try {
+                    return { path: relPath, content: await readFile(`${repoPath}/${relPath}`, "utf-8") };
+                } catch {
+                    return null; // deleted/binary/unreadable — dropped, not fatal
+                }
+            }),
+        );
+
         const res = await
             fetch(`${process.env.SANDBOX_RUNNER_URL ??
                 "http://localhost:8001"}/v1/verify`, {
@@ -109,8 +124,7 @@ async function fetchLintResults(
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    repo_path: repoPath,
-                    changed_files: changedFiles
+                    files: files.filter((f): f is { path: string; content: string } => f !== null),
                 }),
             });
         if (!res.ok) return [];

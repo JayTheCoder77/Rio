@@ -1,6 +1,10 @@
 FROM oven/bun:1.3-slim AS base
 WORKDIR /repo
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY package.json bun.lock ./
 COPY apps/github-app/package.json apps/github-app/package.json
 COPY apps/worker/package.json apps/worker/package.json
