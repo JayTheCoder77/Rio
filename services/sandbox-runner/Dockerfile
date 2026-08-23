@@ -1,21 +1,19 @@
 FROM python:3.12-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        git curl ca-certificates gnupg && \
+    apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN pip install --no-cache-dir ruff mypy semgrep
-RUN npm install -g typescript eslint
+# ruff is the only linter actually wired to an endpoint (see app/main.py) —
+# mypy/semgrep were installed here before but never called anywhere, and
+# node/npm/eslint/typescript are gone entirely now that JS/TS support was
+# dropped (a shipped eslint.config.js usually imports plugins this image
+# doesn't have, so it silently no-op'd rather than actually linted).
+RUN pip install --no-cache-dir ruff
 
 COPY packages/rio-core /rio-core-src
 RUN pip install --no-cache-dir /rio-core-src
 
-# was missing entirely — sandbox-runner's own deps (fastapi, uvicorn)
 COPY services/sandbox-runner /sandbox-runner-src
 RUN pip install --no-cache-dir "fastapi[standard]" "uvicorn[standard]" -e /sandbox-runner-src
 
