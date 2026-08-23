@@ -42,5 +42,10 @@ jobs:
         run: cd services/ai-engine && ../../.venv/bin/python -m pytest tests -q
       - name: build sandbox image
         run: docker build -t sandbox-runner:latest -f services/sandbox-runner/Dockerfile .
-      - name: tests (sandbox-runner, incl. Docker E2E)
+      # Smoke test the built image: imports the app (deps present) and confirms
+      # `ruff` — the only runtime linter — is actually on PATH. This is the
+      # minimal stand-in for the old Docker E2E test that exercised the image.
+      - name: smoke test sandbox image
+        run: docker run --rm sandbox-runner:latest python -c "import app.main, shutil; assert shutil.which('ruff'), 'ruff binary missing from image'; print('sandbox image ok')"
+      - name: tests (sandbox-runner)
         run: cd services/sandbox-runner && ../../.venv/bin/python -m pytest tests -q
