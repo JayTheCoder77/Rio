@@ -30,6 +30,12 @@ def write_config(config_path, **api_kwargs):
     config_path.write_text("\n".join(lines) + "\n")
 
 
+class TestConfigPath:
+    def test_resolves_into_rio_config_toml(self):
+        assert config.CONFIG_PATH.name == "config.toml"
+        assert config.CONFIG_PATH.parent.name == "rio"
+
+
 class TestGetAiEngineUrl:
     def test_default_when_no_config(self, config_path):
         assert config.get_ai_engine_url() == "http://localhost:8000"

@@ -29,8 +29,11 @@ def _write_config(data: dict) -> None:
     lines.append(f'api_key = "{api_section["api_key"]}"')
 
     CONFIG_PATH.write_text("\n".join(lines) + "\n")
-    # This file holds a real credential — don't rely on the default umask.
-    os.chmod(CONFIG_PATH, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+    # This file holds a real credential. On POSIX, lock it to the user via 0o600.
+    # That mode has no real meaning on Windows, where %APPDATA% is already
+    # per-user private by default.
+    if os.name != "nt":
+        os.chmod(CONFIG_PATH, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
 
 
 def _validate_api_key(api_key: str, ai_engine_url: str) -> None:
