@@ -16,7 +16,7 @@ OpenRouter key in the dashboard, so there is no shared bill for LLM usage.
 
 ---
 
-
+Note For Me - hit health endpoints of web services and workers in case the app/cli doesnt work
 
 ## Features
 
