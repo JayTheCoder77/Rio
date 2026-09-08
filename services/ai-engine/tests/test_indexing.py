@@ -41,6 +41,7 @@ def test_index_repo_upserts_chunks(monkeypatch, fake_index, stub_embeddings):
     assert namespace == "repo-1"
     assert vectors[0]["values"] == [0.1] * 768
     assert vectors[0]["metadata"]["file_path"] == "hello.py"
+    assert vectors[0]["metadata"]["kind"] == "code"
     assert vectors[0]["metadata"]["text"]
     assert vectors[0]["id"].startswith("hello.py:")
 
@@ -98,3 +99,48 @@ def test_index_endpoint(monkeypatch, fake_index, stub_embeddings):
     )
 
     assert result == {"status": "ok", "chunks_indexed": 1}
+
+
+def test_index_repo_uses_parser_and_records_symbols(monkeypatch, fake_index, stub_embeddings):
+    from app import indexing
+    from rio_core.chunking import CodeChunk
+    from rio_core.models import Symbol
+
+    class FakeParser:
+        def chunk(self, path, content):
+            return [CodeChunk(file_path=path, start_line=1, end_line=1, text=content)]
+
+        def symbols(self, path, content):
+            return [Symbol(name="hello", kind="function", start_line=1, end_line=1)]
+
+    monkeypatch.setattr(indexing, "index", fake_index)
+    count = indexing.index_repo(
+        [("hello.py", "def hello():\n    pass\n")],
+        "repo-5",
+        parser=FakeParser(),
+    )
+    assert count == 1
+    metadata = fake_index.calls[0][0][0]["metadata"]
+    assert metadata["kind"] == "code"
+    assert metadata["symbols"] == ["hello"]
+
+
+def test_index_knowledge_upserts_pr_and_issue(monkeypatch, fake_index, stub_embeddings):
+    from app import indexing
+    from app.state import KnowledgeDoc
+
+    monkeypatch.setattr(indexing, "index", fake_index)
+    monkeypatch.setattr(indexing, "upsert_pr_index", lambda *args, **kwargs: None)
+    monkeypatch.setattr(indexing, "upsert_issue_index", lambda *args, **kwargs: None)
+
+    count = indexing.index_knowledge(
+        "repo-6",
+        [
+            KnowledgeDoc(kind="pr", number=3, title="Add x", body="body"),
+            KnowledgeDoc(kind="issue", number=9, title="Bug", body="repro"),
+        ],
+    )
+    assert count == 2
+    vectors = fake_index.calls[0][0]
+    assert {v["id"] for v in vectors} == {"pr:3", "issue:9"}
+    assert {v["metadata"]["kind"] for v in vectors} == {"pr", "issue"}

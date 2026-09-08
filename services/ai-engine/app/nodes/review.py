@@ -1,24 +1,16 @@
-import fnmatch
 import logging
-import os
 
 from langchain_openai import ChatOpenAI
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel
 from rio_core.config import SEVERITY_RANK
-from rio_core.diff import parse_diff
-from rio_core.models import Finding, RetrievedChunk
+from rio_core.models import Finding
 
-from app.indexing import get_embeddings, get_index
+from app.errors import ProviderCredentialError
+from app.knowledge.pack import format_pack
 from app.state import LlmCredential, ReviewState
-from app.utils.utils import format_context
 
 logger = logging.getLogger(__name__)
-
-# Rough token-cost guardrail. Tune per deployment via the MAX_DIFF_CHARS env
-# var (set lower in prod if you want stricter caps) rather than editing code.
-MAX_DIFF_CHARS = int(os.getenv("MAX_DIFF_CHARS", "40000"))
-MAX_CONTEXT_CHARS = 5000
 
 PROVIDER_BASE_URLS = {
     "groq": "https://api.groq.com/openai/v1",
@@ -31,37 +23,9 @@ PROVIDER_DISPLAY_NAMES = {
 }
 
 
-class ProviderCredentialError(RuntimeError):
-    """Raised when the caller's BYOK provider (Groq/OpenRouter) rejects the
-    request — bad model name, revoked/invalid key, rate limit, etc. Distinct
-    from a generic crash: `main.py` catches this and returns a clear 4xx
-    instead of an opaque 500, so the CLI and the GitHub App failure comment
-    can both show the user something actionable."""
-
-
-class DiffTooLargeError(RuntimeError):
-    """Raised when the diff exceeds MAX_DIFF_CHARS. `main.py` catches this and
-    returns a 422 so callers get a clear, actionable message instead of a raw
-    500 from an unhandled ValueError."""
-
-
-def ingest(state: ReviewState) -> dict:
-    if len(state.diff) > MAX_DIFF_CHARS:
-        raise DiffTooLargeError(
-            f"diff too large ({len(state.diff)} chars) — cap is {MAX_DIFF_CHARS}. "
-            "Review a smaller scope (e.g. `rio review --staged`), or raise the "
-            "ai-engine's MAX_DIFF_CHARS env var for your deployment."
-        )
-    
-    parsed_files = parse_diff(state.diff)
-    filtered_files = [
-        pf for pf in parsed_files
-        if not any (fnmatch.fnmatch(pf.path , pattern) for pattern in state.config.ignore_paths)
-   ]
-    return {"parsed_files" : filtered_files}
-
 class FindingsResponse(BaseModel):
     findings: list[Finding]
+
 
 def build_llm(credential: LlmCredential) -> ChatOpenAI:
     """Builds a fresh, per-request LLM client from the caller's BYOK
@@ -75,6 +39,7 @@ def build_llm(credential: LlmCredential) -> ChatOpenAI:
         model=credential.model,
         temperature=0,
     )
+
 
 REVIEW_SYSTEM_PROMPT = """You are Rio, an automated code reviewer. You are given a unified diff \
 of a pull request and must find real, actionable issues introduced by the changes.
@@ -112,6 +77,7 @@ Respond with ONLY a single valid JSON object matching the FindingsResponse schem
 text or explanation.
 """
 
+
 def review(state: ReviewState) -> dict:
     if state.llm_credential is None:
         # Fail closed — no shared/self-hosted fallback. Reaching this node
@@ -135,9 +101,9 @@ def review(state: ReviewState) -> dict:
     structured_llm = llm.with_structured_output(FindingsResponse, method="function_calling")
 
     human_message = f"""## Retrieved context from the repository
-                        {format_context(state.context)}
-                        ## Diff to review
-                        {state.diff}"""
+{format_pack(state.context)}
+## Diff to review
+{state.diff}"""
     provider_name = PROVIDER_DISPLAY_NAMES[state.llm_credential.provider]
     model_name = state.llm_credential.model
     try:
@@ -187,70 +153,6 @@ def review(state: ReviewState) -> dict:
     min_rank = SEVERITY_RANK[state.config.min_severity]
     filtered = [f for f in response.findings if SEVERITY_RANK[f.severity] >= min_rank]
 
-    filtered.sort(key=lambda f : SEVERITY_RANK[f.severity] ,reverse=True)
+    filtered.sort(key=lambda f: SEVERITY_RANK[f.severity], reverse=True)
     capped = filtered[: state.config.max_comments_per_pr]
-    return {"findings" : capped}
-
-def enrich(state : ReviewState) -> dict:
-    if state.repo_id is None:
-        return {"context": []}
-    all_candidates : list[RetrievedChunk] = []
-
-    try:
-        for pf in state.parsed_files:
-            query_text = "\n".join(pf.added_lines.values())
-            if not query_text.strip():
-                continue
-
-            vector = get_embeddings().embed_query(query_text)
-            results = get_index().query(
-                vector=vector,
-                top_k=3,
-                namespace=state.repo_id,
-                include_metadata=True
-            )
-
-            for match in results.matches:
-                if match.metadata["file_path"] == pf.path:
-                    continue
-                all_candidates.append(RetrievedChunk(
-                    file_path=match.metadata["file_path"],
-                    start_line=match.metadata["start_line"],
-                    end_line=match.metadata["end_line"],
-                    text=match.metadata["text"],
-                    score=match.score, 
-                ))
-    except Exception as exc:  # noqa: BLE001 — deliberate: degrade on any provider/network failure
-        # Context retrieval is best-effort — it only informs the review and
-        # is never cited directly. If Pinecone or the embedding service is
-        # unreachable (or not yet configured), degrade to no context rather
-        # than failing the whole review.
-        logger.warning("context retrieval skipped: %s", exc)
-        return {"context": []}
-
-    all_candidates.sort(key=lambda c: c.score, reverse=True)
-  
-    context: list[RetrievedChunk] = []
-    total = 0
-    for c in all_candidates:
-        if total + len(c.text) > MAX_CONTEXT_CHARS:
-            break
-        context.append(c)
-        total += len(c.text)
-
-    return {"context": context}
-
-def verify(state : ReviewState) -> dict:
-    valid_lines_by_file = {pf.path : set(pf.added_lines.keys()) for pf in state.parsed_files }
-
-    line_verified = [f for f in state.findings if f.file in valid_lines_by_file and f.line in valid_lines_by_file[f.file]
-    ]
-
-    lint_locations = {(lr.file , lr.line) for lr in state.lint_results}
-
-    corroborated = [
-        f for f in line_verified
-        if f.severity != "info" or (f.file , f.line) in lint_locations
-    ]
-
-    return {"findings": corroborated}
+    return {"findings": capped}

@@ -9,11 +9,11 @@ from app.auth import (
     require_current_user,
     verify_internal_service_token,
 )
+from app.errors import DiffTooLargeError, ProviderCredentialError
 from app.graph import review_graph
-from app.indexing import index_repo
+from app.indexing import index_knowledge, index_repo
 from app.mcp_server import mcp
-from app.nodes import DiffTooLargeError, ProviderCredentialError
-from app.state import IndexRepoRequest, ReviewState
+from app.state import IndexKnowledgeRequest, IndexRepoRequest, ReviewState
 
 
 @asynccontextmanager
@@ -87,6 +87,12 @@ def review_endpoint(
 
 @app.post("/v1/index/repo")
 def index_endpoint(repo: IndexRepoRequest) -> dict:
-    count = index_repo([(f.path, f.content) for f in repo.files] , repo.repo_id)
-    return {"status" : "ok" , "chunks_indexed" : count}
+    count = index_repo([(f.path, f.content) for f in repo.files], repo.repo_id)
+    return {"status": "ok", "chunks_indexed": count}
+
+
+@app.post("/v1/index/knowledge")
+def index_knowledge_endpoint(body: IndexKnowledgeRequest) -> dict:
+    count = index_knowledge(body.repo_id, body.documents)
+    return {"status": "ok", "documents_indexed": count}
 

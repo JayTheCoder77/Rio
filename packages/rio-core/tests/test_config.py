@@ -7,6 +7,7 @@ def test_rio_config_defaults():
     assert cfg.min_severity == "info"
     assert cfg.max_comments_per_pr == 10
     assert cfg.require_check is False
+    assert cfg.guidelines == []
 
 
 def test_rio_config_accepts_custom_values():

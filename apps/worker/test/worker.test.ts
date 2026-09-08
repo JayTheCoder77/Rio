@@ -168,8 +168,8 @@ describe("worker processor", () => {
     await runHandler();
 
     expect(testMocks.cloneRepo).not.toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/v1/review"), expect.anything());
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/v1/index/knowledge"), expect.anything());
     delete process.env.SANDBOX_ENABLED;
   });
 });

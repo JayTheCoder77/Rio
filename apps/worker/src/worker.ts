@@ -97,25 +97,30 @@ async function getChangedFiles(octokit: Octokit, owner: string, repoName: string
     return files.map((f) => f.filename);
 }
 
-async function fetchLintResults(
+async function readChangedFiles(
     repoPath: string,
     changedFiles: string[],
+): Promise<{ path: string; content: string }[]> {
+    const files = await Promise.all(
+        changedFiles.map(async (relPath) => {
+            try {
+                return { path: relPath, content: await readFile(`${repoPath}/${relPath}`, "utf-8") };
+            } catch {
+                return null; // deleted/binary/unreadable — dropped, not fatal
+            }
+        }),
+    );
+    return files.filter((f): f is { path: string; content: string } => f !== null);
+}
+
+async function fetchLintResults(
+    files: { path: string; content: string }[],
 ): Promise<unknown[]> {
     try {
         // sandbox-runner is a separate container — it can't read repoPath
         // off this worker's disk, so file contents get shipped instead.
         // Python-only: JS/TS (eslint) was dropped, see sandbox-runner's
         // /v1/verify comment for why.
-        const files = await Promise.all(
-            changedFiles.map(async (relPath) => {
-                try {
-                    return { path: relPath, content: await readFile(`${repoPath}/${relPath}`, "utf-8") };
-                } catch {
-                    return null; // deleted/binary/unreadable — dropped, not fatal
-                }
-            }),
-        );
-
         const res = await
             fetch(`${process.env.SANDBOX_RUNNER_URL ??
                 "http://localhost:8001"}/v1/verify`, {
@@ -123,9 +128,7 @@ async function fetchLintResults(
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({
-                    files: files.filter((f): f is { path: string; content: string } => f !== null),
-                }),
+                body: JSON.stringify({ files }),
             });
         if (!res.ok) return [];
         const { lint_results } = await res.json() as {
@@ -134,6 +137,33 @@ async function fetchLintResults(
         return lint_results;
     } catch {
         return []; // best-effort — sandbox signal is optional, never fails the review
+    }
+}
+
+async function indexPrKnowledge(
+    repoId: string,
+    prNumber: number,
+    title: string,
+    body: string,
+    headSha: string,
+): Promise<void> {
+    try {
+        await fetch(`${process.env.AI_ENGINE_URL ?? "http://localhost:8000"}/v1/index/knowledge`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                repo_id: repoId,
+                documents: [{
+                    kind: "pr",
+                    number: prNumber,
+                    title,
+                    body,
+                    head_sha: headSha,
+                }],
+            }),
+        });
+    } catch {
+        // best-effort — a failed PR index must not fail the review
     }
 }
 
@@ -199,13 +229,15 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
         const rioConfig = await fetchRioConfig(octokit, owner, repoName, headSha);
 
         let lintResults: unknown[] = [];
+        let fileSnapshots: { path: string; content: string }[] = [];
         if (isSandboxEnabled()) {
             const { token } = await auth({ type: "installation", installationId });
             try {
                 const { path: repoPath, cleanup } = await cloneRepo(owner, repoName, headSha, token);
                 try {
                     const changedFiles = await getChangedFiles(octokit, owner, repoName, prNumber);
-                    lintResults = await fetchLintResults(repoPath, changedFiles);
+                    fileSnapshots = await readChangedFiles(repoPath, changedFiles);
+                    lintResults = await fetchLintResults(fileSnapshots);
                 } finally {
                     await cleanup();
                 }
@@ -232,6 +264,7 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
                 on_behalf_of_user_id: onBehalfOfUserId,
                 ...(rioConfig ? { config: rioConfig } : {}),
                 lint_results: lintResults,
+                file_snapshots: fileSnapshots,
             }),
         });
 
@@ -292,6 +325,23 @@ const worker = new Worker<PrReviewJob>("pr-review", async (job: Job<PrReviewJob>
             .returning({ id: repos.id });
 
         if (!repoRow) return;
+
+        let title = `${repo}#${prNumber}`;
+        let body = "";
+        try {
+            const { data: pr } = await octokit.rest.pulls.get({
+                owner,
+                repo: repoName,
+                pull_number: prNumber,
+            });
+            if (pr && typeof pr === "object" && "title" in pr && typeof pr.title === "string") {
+                title = pr.title;
+                body = typeof pr.body === "string" ? pr.body : "";
+            }
+        } catch {
+            // title/body stay as fallbacks
+        }
+        await indexPrKnowledge(repoRow.id, prNumber, title, body, headSha);
 
         await db.transaction(async (tx) => {
             const [rev] = await tx.insert(reviews)
