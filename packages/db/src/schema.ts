@@ -134,6 +134,60 @@ export const findings = pgTable('findings', {
   index('findings_review_id_idx').on(table.reviewId),
 ]);
 
+export const guidelineSource = pgEnum('guideline_source', [
+  'rio_yml',
+  'imported',
+]);
+
+export const codingGuidelines = pgTable('coding_guidelines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  repoId: uuid('repo_id').notNull().references(() => repos.id),
+  pathGlob: text('path_glob').notNull(),
+  ruleText: text('rule_text').notNull(),
+  source: guidelineSource('source').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('coding_guidelines_repo_id_idx').on(table.repoId),
+]);
+
+export const learnings = pgTable('learnings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  repoId: uuid('repo_id').notNull().references(() => repos.id),
+  pathGlob: text('path_glob'),
+  pattern: text('pattern'),
+  instruction: text('instruction').notNull(),
+  active: boolean('active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('learnings_repo_id_idx').on(table.repoId),
+]);
+
+export const prIndex = pgTable('pr_index', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  repoId: uuid('repo_id').notNull().references(() => repos.id),
+  prNumber: bigint('pr_number', { mode: 'number' }).notNull(),
+  title: text('title').notNull(),
+  body: text('body'),
+  headSha: text('head_sha'),
+  indexedAt: timestamp('indexed_at').defaultNow().notNull(),
+}, (table) => [
+  index('pr_index_repo_id_idx').on(table.repoId),
+  uniqueIndex('pr_index_repo_pr_unique').on(table.repoId, table.prNumber),
+]);
+
+export const issuesIndex = pgTable('issues_index', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  repoId: uuid('repo_id').notNull().references(() => repos.id),
+  issueNumber: bigint('issue_number', { mode: 'number' }).notNull(),
+  title: text('title').notNull(),
+  body: text('body'),
+  state: text('state'),
+  indexedAt: timestamp('indexed_at').defaultNow().notNull(),
+}, (table) => [
+  index('issues_index_repo_id_idx').on(table.repoId),
+  uniqueIndex('issues_index_repo_issue_unique').on(table.repoId, table.issueNumber),
+]);
+
 export const usersRelations = relations(users, ({ many }) => ({
   apiKeys: many(apiKeys),
   userInstallations: many(userInstallations),
@@ -145,11 +199,15 @@ export const installationsRelations = relations(installations, ({ many }) => ({
   userInstallations: many(userInstallations),
 }));
 
-export const reposRelations = relations(repos, ({ one }) => ({
+export const reposRelations = relations(repos, ({ one, many }) => ({
   installation: one(installations, {
     fields: [repos.installationId],
     references: [installations.id],
   }),
+  codingGuidelines: many(codingGuidelines),
+  learnings: many(learnings),
+  prIndex: many(prIndex),
+  issuesIndex: many(issuesIndex),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
@@ -171,6 +229,34 @@ export const findingsRelations = relations(findings, ({ one }) => ({
   review: one(reviews, {
     fields: [findings.reviewId],
     references: [reviews.id],
+  }),
+}));
+
+export const codingGuidelinesRelations = relations(codingGuidelines, ({ one }) => ({
+  repo: one(repos, {
+    fields: [codingGuidelines.repoId],
+    references: [repos.id],
+  }),
+}));
+
+export const learningsRelations = relations(learnings, ({ one }) => ({
+  repo: one(repos, {
+    fields: [learnings.repoId],
+    references: [repos.id],
+  }),
+}));
+
+export const prIndexRelations = relations(prIndex, ({ one }) => ({
+  repo: one(repos, {
+    fields: [prIndex.repoId],
+    references: [repos.id],
+  }),
+}));
+
+export const issuesIndexRelations = relations(issuesIndex, ({ one }) => ({
+  repo: one(repos, {
+    fields: [issuesIndex.repoId],
+    references: [repos.id],
   }),
 }));
 

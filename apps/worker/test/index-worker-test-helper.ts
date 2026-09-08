@@ -31,6 +31,18 @@ vi.mock("@octokit/auth-app", () => ({
   createAppAuth: () => async () => ({ token: "inst-token" }),
 }));
 
+vi.mock("octokit", () => {
+  class MockOctokit {
+    rest = {
+      issues: {
+        listForRepo: async () => ({ data: [] }),
+      },
+    };
+    constructor(_opts: unknown) {}
+  }
+  return { Octokit: MockOctokit };
+});
+
 vi.mock(new URL("../src/clone", import.meta.url).pathname, () => ({
   cloneRepo: mocks.cloneRepo,
 }));

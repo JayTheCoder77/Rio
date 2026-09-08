@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from app.knowledge.pack import format_context, format_pack, pack_context
 from app.nodes import (
     ProviderCredentialError,
     build_llm,
@@ -9,10 +10,17 @@ from app.nodes import (
     verify,
 )
 from app.state import LlmCredential, ReviewState
-from app.utils.utils import format_context
 from openai import APIConnectionError, APIStatusError
 from rio_core.config import RioConfig
-from rio_core.models import Finding
+from rio_core.models import (
+    ContextPack,
+    FileSnapshot,
+    Finding,
+    HunkWindow,
+    Learning,
+    PathGuideline,
+    RetrievedChunk,
+)
 from rio_core.sandbox import LintResult
 
 
@@ -47,7 +55,10 @@ class FakeLLM:
 
 
 def patch_llm(monkeypatch: pytest.MonkeyPatch, outcome):
-    monkeypatch.setattr("app.nodes.build_llm", lambda cred: FakeLLM(outcome))
+    import importlib
+
+    review_mod = importlib.import_module("app.nodes.review")
+    monkeypatch.setattr(review_mod, "build_llm", lambda cred: FakeLLM(outcome))
 
 
 CRED = LlmCredential(provider="groq", api_key="sk-test", model="llama-3.1-8b")
@@ -68,6 +79,7 @@ class TestIngest:
         )
         out = ingest(state)
         assert out["parsed_files"] == []
+        assert out["hunk_windows"] == []
 
     def test_keeps_files_not_matching_ignore(self):
         state = ReviewState(
@@ -85,23 +97,43 @@ class TestIngest:
         assert [pf.path for pf in out["parsed_files"]] == ["tests/a.py"]
 
     def test_raises_on_oversized_diff(self, monkeypatch):
-        from app.nodes import DiffTooLargeError
+        from app.errors import DiffTooLargeError
 
-        monkeypatch.setattr("app.nodes.MAX_DIFF_CHARS", 40_000)
+        monkeypatch.setattr("app.limits.MAX_DIFF_CHARS", 40_000)
         big = "a" * 40_001
         with pytest.raises(DiffTooLargeError, match="diff too large"):
             ingest(ReviewState(diff=big))
 
+    def test_builds_hunk_windows_from_snapshots(self):
+        content = "a\nb\nc\n"
+        state = ReviewState(
+            diff=(
+                "diff --git a/f.py b/f.py\n"
+                "--- a/f.py\n"
+                "+++ b/f.py\n"
+                "@@ -1,2 +1,3 @@\n"
+                " a\n"
+                "+b\n"
+                " c\n"
+            ),
+            file_snapshots=[FileSnapshot(path="f.py", content=content)],
+        )
+        out = ingest(state)
+        assert len(out["hunk_windows"]) == 1
+        window = out["hunk_windows"][0]
+        assert window.file_path == "f.py"
+        assert "b" in window.text
+
 
 class TestVerify:
-    def _state(self, findings, lint_results=None):
+    def _state(self, findings, lint_results=None, learnings=None):
         state = ReviewState(
             diff="",
             parsed_files=[],
             findings=findings,
             lint_results=lint_results or [],
+            learnings=learnings or [],
         )
-        # Build a valid-lines map matching a one-line diff.
         from rio_core.models import ParsedFile
 
         state.parsed_files = [ParsedFile(path="f.py", added_lines={5: "x\n"})]
@@ -131,6 +163,15 @@ class TestVerify:
         out = verify(self._state(corroborated, lint))["findings"]
         assert len(out) == 1
 
+    def test_learning_glob_drops_matching_finding(self):
+        findings = [
+            Finding(file="f.py", line=5, severity="warning", message="bare except", rationale="r"),
+            Finding(file="f.py", line=5, severity="critical", message="other", rationale="r"),
+        ]
+        learnings = [Learning(path_glob="*.py", pattern="bare except", instruction="ignore")]
+        out = verify(self._state(findings, learnings=learnings))["findings"]
+        assert [f.message for f in out] == ["other"]
+
 
 class TestBuildLlm:
     def test_groq_base_url_and_model(self):
@@ -158,12 +199,19 @@ class TestFormatContext:
         assert format_context([]) == "No related context was retrieved."
 
     def test_renders_chunks(self):
-        from rio_core.models import RetrievedChunk
-
         chunks = [RetrievedChunk(file_path="a.py", start_line=1, end_line=2, text="code", score=0.5)]
         out = format_context(chunks)
         assert "### a.py (lines 1-2)" in out
         assert "code" in out
+
+    def test_format_pack_labels_sections(self):
+        pack = ContextPack(
+            guidelines=["no raw SQL"],
+            hunk_windows=[HunkWindow(file_path="a.py", start_line=1, end_line=2, text="x = 1")],
+        )
+        out = format_pack(pack)
+        assert "## Coding guidelines" in out
+        assert "## Surrounding code from changed files" in out
 
 
 class TestReview:
@@ -230,41 +278,55 @@ class TestReview:
             review(self._state())
 
     def test_unparseable_output_maps_to_provider_error(self, monkeypatch):
-        # Simulates langchain raising OutputParserException (a ValueError) when
-        # the model returns no usable tool call — must be a clean 4xx, not a 500.
         patch_llm(monkeypatch, ValueError("Expected but did not find tool call"))
         with pytest.raises(ProviderCredentialError, match="could not be parsed"):
             review(self._state())
 
     def test_bare_value_error_maps_cleanly(self, monkeypatch):
-        # A ValueError() with no message (args=()) used to crash the old handler
-        # with IndexError — now it is swallowed into the same clean 4xx.
         patch_llm(monkeypatch, ValueError())
         with pytest.raises(ProviderCredentialError, match="could not be parsed"):
             review(self._state())
 
 
 class TestEnrich:
-    def test_no_repo_id_returns_empty_context(self):
-        assert enrich(ReviewState(diff="", repo_id=None)) == {"context": []}
+    def test_no_repo_id_returns_pack_without_rag(self):
+        out = enrich(ReviewState(diff="", repo_id=None))
+        assert out["context"].code == []
+        assert out["learnings"] == []
 
-    def test_queries_index_and_skips_same_file(self, monkeypatch):
-        from types import SimpleNamespace
+    def test_includes_yaml_guidelines_and_hunk_windows(self):
+        state = ReviewState(
+            diff="",
+            repo_id=None,
+            parsed_files=[],
+            hunk_windows=[HunkWindow(file_path="a.py", start_line=1, end_line=2, text="x")],
+            config=RioConfig(guidelines=[PathGuideline(paths=["*.py"], text="prefer pydantic")]),
+        )
+        from rio_core.models import ParsedFile
 
+        state.parsed_files = [ParsedFile(path="a.py", added_lines={1: "x\n"})]
+        pack = enrich(state)["context"]
+        assert "prefer pydantic" in pack.guidelines
+        assert pack.hunk_windows[0].file_path == "a.py"
+
+    def test_queries_index_and_skips_same_file_when_windows_exist(self, monkeypatch):
         from rio_core.models import ParsedFile
 
         class FakeMatch:
-            def __init__(self, file_path, start, end, text, score):
+            def __init__(self, file_path, start, end, text, score, kind="code"):
                 self.metadata = {
                     "file_path": file_path,
                     "start_line": start,
                     "end_line": end,
                     "text": text,
+                    "kind": kind,
                 }
                 self.score = score
 
         class FakeIndex:
             def query(self, **kwargs):
+                if kwargs.get("filter"):
+                    return type("R", (), {"matches": []})()
                 assert kwargs["namespace"] == "repo-1"
                 assert kwargs["top_k"] == 3
                 return type("R", (), {"matches": [
@@ -272,33 +334,63 @@ class TestEnrich:
                     FakeMatch("f.py", 1, 2, "self", 0.99),
                 ]})()
 
-        # Patch the getters (not bound module names — clients are lazy now).
         monkeypatch.setattr(
-            "app.nodes.get_embeddings",
-            lambda: SimpleNamespace(embed_query=lambda text: [0.1, 0.2, 0.3]),
+            "app.knowledge.code_index.get_embeddings",
+            lambda: type("E", (), {"embed_query": lambda self, text: [0.1, 0.2, 0.3]})(),
         )
-        monkeypatch.setattr("app.nodes.get_index", lambda: FakeIndex())
+        monkeypatch.setattr("app.knowledge.code_index.get_index", lambda: FakeIndex())
+        monkeypatch.setattr("app.nodes.assemble.load_guidelines", lambda repo_id: [])
+        monkeypatch.setattr("app.nodes.assemble.load_learnings", lambda repo_id: [])
 
         state = ReviewState(
             diff="",
             repo_id="repo-1",
             parsed_files=[ParsedFile(path="f.py", added_lines={1: "same text\n"})],
+            hunk_windows=[HunkWindow(file_path="f.py", start_line=1, end_line=2, text="same text")],
         )
         context = enrich(state)["context"]
-        assert len(context) == 1
-        assert context[0].file_path == "other.py"
+        assert [c.file_path for c in context.code] == ["other.py"]
 
-    def test_retrieval_failure_degrades_to_empty_context(self, monkeypatch):
+    def test_retrieval_failure_degrades_to_empty_code(self, monkeypatch):
         from rio_core.models import ParsedFile
 
         def boom_embeddings():
             raise RuntimeError("ollama not running")
 
-        monkeypatch.setattr("app.nodes.get_embeddings", boom_embeddings)
+        monkeypatch.setattr("app.knowledge.code_index.get_embeddings", boom_embeddings)
+        monkeypatch.setattr("app.nodes.assemble.load_guidelines", lambda repo_id: [])
+        monkeypatch.setattr("app.nodes.assemble.load_learnings", lambda repo_id: [])
 
         state = ReviewState(
             diff="",
             repo_id="repo-1",
             parsed_files=[ParsedFile(path="f.py", added_lines={1: "same text\n"})],
         )
-        assert enrich(state) == {"context": []}
+        out = enrich(state)
+        assert out["context"].code == []
+
+
+class TestPack:
+    def test_budget_never_exceeds_cap(self):
+        windows = [
+            HunkWindow(file_path="a.py", start_line=1, end_line=10, text="a" * 3000)
+        ]
+        code = [
+            RetrievedChunk(file_path="b.py", start_line=1, end_line=2, text="b" * 3000, score=0.9)
+        ]
+        pack = pack_context(
+            guidelines=["g"],
+            learnings=[],
+            hunk_windows=windows,
+            code=code,
+            issues=[],
+            prs=[],
+            budget=4000,
+        )
+        total = (
+            sum(len(g) for g in pack.guidelines)
+            + sum(len(w.text) for w in pack.hunk_windows)
+            + sum(len(c.text) for c in pack.code)
+        )
+        assert total <= 4000
+        assert pack.guidelines == ["g"]

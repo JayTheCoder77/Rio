@@ -2,7 +2,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 from rio_core import LintResult, RioConfig
-from rio_core.models import Finding, ParsedFile, RetrievedChunk
+from rio_core.models import (
+    ContextPack,
+    FileSnapshot,
+    Finding,
+    HunkWindow,
+    Learning,
+    ParsedFile,
+)
 
 
 class LlmCredential(BaseModel):
@@ -20,10 +27,13 @@ class LlmCredential(BaseModel):
 
 class ReviewState(BaseModel):
     diff: str
-    repo_id : str | None = None
+    repo_id: str | None = None
     config: RioConfig = Field(default_factory=RioConfig)
     parsed_files: list[ParsedFile] = Field(default_factory=list)
-    context : list[RetrievedChunk] = Field(default_factory=list)
+    file_snapshots: list[FileSnapshot] = Field(default_factory=list)
+    hunk_windows: list[HunkWindow] = Field(default_factory=list)
+    context: ContextPack = Field(default_factory=ContextPack)
+    learnings: list[Learning] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     lint_results: list[LintResult] = Field(default_factory=list)
     llm_credential: LlmCredential | None = None
@@ -35,13 +45,29 @@ class ReviewState(BaseModel):
     # the client — stripped out in `main.py` before the response is sent.
     on_behalf_of_user_id: str | None = None
 
+
 class IndexFile(BaseModel):
     path: str
     content: str
+
 
 class IndexRepoRequest(BaseModel):
     # Was `repo_path: str` — a path on the *worker's* disk, which ai-engine
     # (a separate container) can never see. The worker now walks the clone
     # itself and ships file contents directly; see `apps/worker/src/indexWorker.ts`.
     files: list[IndexFile]
-    repo_id : str
+    repo_id: str
+
+
+class KnowledgeDoc(BaseModel):
+    kind: Literal["pr", "issue"]
+    number: int
+    title: str
+    body: str = ""
+    head_sha: str | None = None
+    state: str | None = None
+
+
+class IndexKnowledgeRequest(BaseModel):
+    repo_id: str
+    documents: list[KnowledgeDoc]

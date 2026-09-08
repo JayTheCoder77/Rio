@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
 import pytest
+from app.errors import ProviderCredentialError
 from app.main import app
-from app.nodes import ProviderCredentialError
 from app.state import LlmCredential
 from fastapi.testclient import TestClient
 
@@ -146,9 +146,9 @@ class TestReview:
 
         # Run the real graph (no review_graph mock): ingest() raises
         # DiffTooLargeError before any node touches the network.
-        from app import nodes
+        from app import limits
 
-        monkeypatch.setattr(nodes, "MAX_DIFF_CHARS", 100)
+        monkeypatch.setattr(limits, "MAX_DIFF_CHARS", 100)
 
         big_diff = DIFF + "+" + "a" * 500
         resp = client.post("/v1/review", json={"diff": big_diff})
@@ -200,3 +200,20 @@ class TestIndex:
         )
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok", "chunks_indexed": 42}
+
+    def test_index_knowledge_endpoint_mocked(self, client, monkeypatch):
+        from app import main as m
+
+        monkeypatch.setattr(m, "index_knowledge", lambda repo_id, documents: 2)
+        resp = client.post(
+            "/v1/index/knowledge",
+            json={
+                "repo_id": "repo-1",
+                "documents": [
+                    {"kind": "pr", "number": 7, "title": "Fix", "body": "details"},
+                    {"kind": "issue", "number": 1, "title": "Bug", "body": ""},
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok", "documents_indexed": 2}

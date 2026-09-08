@@ -4,7 +4,11 @@ from itertools import batched
 from dotenv import load_dotenv
 from langchain_nomic import NomicEmbeddings
 from pinecone import Pinecone
-from rio_core.chunking import CodeChunk, chunk_file
+from rio_core.chunking import CodeChunk
+from rio_core.parser import DEFAULT_PARSER, CodeParser
+
+from app.knowledge.store import upsert_issue_index, upsert_pr_index
+from app.state import KnowledgeDoc
 
 load_dotenv()
 
@@ -40,37 +44,85 @@ def get_index():
     return index
 
 
-BATCH_SIZE=100
+BATCH_SIZE = 100
+TEXT_METADATA_CAP = 8000
 
-def index_repo(files : list[tuple[str,str]] , repo_id : str) -> int:
+
+def index_repo(
+    files: list[tuple[str, str]],
+    repo_id: str,
+    parser: CodeParser | None = None,
+) -> int:
     """Chunks every (path, content) pair, embeds via Nomic, upserts to
     Pinecone under namespace=repo_id. Returns count of chunks upserted.
 
     Takes files directly rather than a disk path — the caller (the worker)
     runs in a separate container from ai-engine, so a local path on its
     filesystem is meaningless here; see IndexRepoRequest in app/state.py."""
-    all_chunks : list[CodeChunk] = []
-    for path,content in files:
-        all_chunks.extend(chunk_file(path , content))
+    parser = parser or DEFAULT_PARSER
+    all_chunks: list[tuple[CodeChunk, list[str]]] = []
+    for path, content in files:
+        symbol_names = [s.name for s in parser.symbols(path, content)]
+        for chunk in parser.chunk(path, content):
+            all_chunks.append((chunk, symbol_names))
 
-    for batch in batched(all_chunks , BATCH_SIZE):
-        texts = [chunk.text for chunk in batch]
+    for batch in batched(all_chunks, BATCH_SIZE):
+        texts = [chunk.text for chunk, _ in batch]
         vectors = get_embeddings().embed_documents(texts)
 
         to_upsert = []
-        for chunk , vector in zip(batch , vectors):
+        for (chunk, symbol_names), vector in zip(batch, vectors):
             vector_id = f"{chunk.file_path}:{chunk.start_line}-{chunk.end_line}"
+            metadata = {
+                "file_path": chunk.file_path,
+                "start_line": chunk.start_line,
+                "end_line": chunk.end_line,
+                "text": chunk.text,
+                "kind": "code",
+            }
+            if symbol_names:
+                metadata["symbols"] = symbol_names
             to_upsert.append({
-                "id" : vector_id,
-                "values" : vector,
-                "metadata" : {
-                    "file_path" : chunk.file_path,
-                    "start_line" : chunk.start_line,
-                    "end_line" : chunk.end_line,
-                    "text" : chunk.text
-                }
+                "id": vector_id,
+                "values": vector,
+                "metadata": metadata,
             })
 
-        get_index().upsert(vectors=to_upsert , namespace=repo_id)
-    
+        get_index().upsert(vectors=to_upsert, namespace=repo_id)
+
     return len(all_chunks)
+
+
+def index_knowledge(repo_id: str, documents: list[KnowledgeDoc]) -> int:
+    """Embed PR/issue documents and upsert Postgres + Pinecone. Best-effort
+    on the Postgres side — a missing table must not fail indexing."""
+    if not documents:
+        return 0
+
+    texts = []
+    for doc in documents:
+        blob = f"{doc.title}\n{doc.body}".strip()
+        texts.append(blob[:TEXT_METADATA_CAP] or doc.title)
+
+    vectors = get_embeddings().embed_documents(texts)
+    to_upsert = []
+    for doc, vector, text in zip(documents, vectors, texts):
+        if doc.kind == "pr":
+            upsert_pr_index(repo_id, doc.number, doc.title, doc.body, doc.head_sha)
+            vector_id = f"pr:{doc.number}"
+        else:
+            upsert_issue_index(repo_id, doc.number, doc.title, doc.body, doc.state)
+            vector_id = f"issue:{doc.number}"
+        to_upsert.append({
+            "id": vector_id,
+            "values": vector,
+            "metadata": {
+                "kind": doc.kind,
+                "number": doc.number,
+                "title": doc.title,
+                "text": text,
+            },
+        })
+
+    get_index().upsert(vectors=to_upsert, namespace=repo_id)
+    return len(to_upsert)
