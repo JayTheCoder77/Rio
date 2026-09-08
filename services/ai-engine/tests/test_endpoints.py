@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
 import pytest
-from app.main import app
 from app.errors import ProviderCredentialError
+from app.main import app
 from app.state import LlmCredential
 from fastapi.testclient import TestClient
 
